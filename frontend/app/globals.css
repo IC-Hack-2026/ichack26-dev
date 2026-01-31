@@ -85,6 +85,12 @@ body {
     border-bottom: 1px solid var(--border-subtle);
 }
 
+.header-top-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 .logo {
     font-family: var(--font-display);
     font-size: 2.5rem;
@@ -98,6 +104,54 @@ body {
     font-size: 0.875rem;
     color: var(--text-secondary);
     font-weight: 500;
+}
+
+.live-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--accent-secondary);
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: default;
+    position: relative;
+    animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.live-button::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.6);
+    animation: live-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 rgba(199, 0, 0, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0.75rem rgba(199, 0, 0, 0.6);
+    }
+}
+
+@keyframes live-dot {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
 }
 
 .header-nav {
@@ -298,6 +352,12 @@ body {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
+.article-hero:hover .article-hero-headline {
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
+}
+
 .article-hero-content {
     display: flex;
     flex-direction: column;
@@ -379,6 +439,12 @@ body {
 .article-card:hover {
     border-color: var(--border-medium);
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.article-card:hover .article-card-headline {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
 }
 
 .article-card-image {
@@ -481,6 +547,25 @@ body {
     background: var(--bg-secondary);
     border: 1px solid var(--border-medium);
     border-radius: var(--radius-md);
+}
+
+.probability-badge.badge-pulse {
+    animation: badge-pulse 650ms ease-out;
+}
+
+@keyframes badge-pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    }
+    45% {
+        transform: scale(1.04);
+        box-shadow: 0 0 0.5rem rgba(5, 41, 98, 0.2);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    }
 }
 
 .badge-value {
