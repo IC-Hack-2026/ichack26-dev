@@ -1,47 +1,37 @@
 const express = require('express');
 const cors = require('cors');
 
-// ============================================================
-// IMPORTING MODULES
-// ============================================================
-// require() loads another JavaScript file and returns its exports.
-// Here we import our Polymarket service which handles all API logic.
-// This keeps server.js focused on HTTP routing (its single responsibility).
-// ============================================================
-const polymarket = require('./polymarket');
+const config = require('./config');
+const articlesRouter = require('./api/routes/articles');
+const internalRouter = require('./api/routes/internal');
+
+// Legacy polymarket routes (for backwards compatibility)
+const polymarket = require('./services/polymarket/client');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// ============================================================
-// MIDDLEWARE
-// ============================================================
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// ============================================================
-// ROUTES
-// ============================================================
-// Notice how clean these route handlers are now!
-// They only handle:
-// 1. Extracting parameters from the request
-// 2. Calling the service function
-// 3. Sending the response (or error)
-//
-// All the business logic (API calls, data transformation) lives
-// in the polymarket.js module. This is "separation of concerns".
-// ============================================================
+// Public API Routes - Article endpoints (new architecture)
+app.use('/api/articles', articlesRouter);
 
-// GET /api/markets - Fetch markets sorted by probability or volume
+// Internal API Routes - Admin/debugging
+app.use('/api/internal', internalRouter);
+
+// Legacy Routes - Keep existing market endpoints for backward compatibility
 app.get('/api/markets', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
         const sortBy = req.query.sortBy || 'probability';
 
-        // Call our service - it handles all the Polymarket API details
-        const result = await polymarket.getMarkets({ limit, sortBy });
+        const markets = await polymarket.fetchMarkets({ limit, sortBy });
 
-        res.json(result);
+        res.json({
+            count: markets.length,
+            markets
+        });
     } catch (error) {
         console.error('Error fetching markets:', error.message);
         res.status(500).json({
@@ -51,22 +41,18 @@ app.get('/api/markets', async (req, res) => {
     }
 });
 
-// GET /api/markets/:slug - Fetch a single market by its slug
 app.get('/api/markets/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
+        const market = await polymarket.fetchMarketBySlug(slug);
 
-        const market = await polymarket.getMarketBySlug(slug);
+        if (!market) {
+            return res.status(404).json({ error: 'Market not found' });
+        }
 
         res.json(market);
     } catch (error) {
         console.error('Error fetching market:', error.message);
-
-        // Check for specific error types and return appropriate status
-        if (error.code === 'NOT_FOUND') {
-            return res.status(404).json({ error: 'Market not found' });
-        }
-
         res.status(500).json({
             error: 'Failed to fetch market from Polymarket',
             details: error.message
@@ -74,14 +60,15 @@ app.get('/api/markets/:slug', async (req, res) => {
     }
 });
 
-// GET /api/events - Fetch events (groups of related markets)
 app.get('/api/events', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
+        const events = await polymarket.fetchEvents({ limit });
 
-        const result = await polymarket.getEvents({ limit });
-
-        res.json(result);
+        res.json({
+            count: events.length,
+            events
+        });
     } catch (error) {
         console.error('Error fetching events:', error.message);
         res.status(500).json({
@@ -91,21 +78,70 @@ app.get('/api/events', async (req, res) => {
     }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Categories endpoint
+app.get('/api/categories', async (req, res) => {
+    try {
+        const db = require('./db');
+        const categories = await db.events.getCategories();
+
+        // If no categories in DB, return default list
+        if (categories.length === 0) {
+            return res.json({
+                categories: [
+                    { name: 'Politics', count: 0 },
+                    { name: 'Crypto', count: 0 },
+                    { name: 'Sports', count: 0 },
+                    { name: 'Finance', count: 0 },
+                    { name: 'Technology', count: 0 },
+                    { name: 'Entertainment', count: 0 },
+                    { name: 'World', count: 0 },
+                    { name: 'Other', count: 0 }
+                ]
+            });
+        }
+
+        res.json({ categories });
+    } catch (error) {
+        console.error('Error fetching categories:', error.message);
+        res.status(500).json({ error: 'Failed to fetch categories' });
+    }
 });
 
-// ============================================================
-// START THE SERVER
-// ============================================================
-app.listen(PORT, () => {
-    console.log(`Backend server running on http://localhost:${PORT}`);
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        services: {
+            polymarket: 'connected',
+            openai: config.openai.apiKey ? 'configured' : 'not-configured',
+            database: config.db.useInMemory ? 'in-memory' : 'postgresql',
+            cache: config.redis.useInMemory ? 'in-memory' : 'redis'
+        }
+    });
+});
+
+// Start the server
+app.listen(config.port, () => {
+    console.log(`\nFuturo News Backend running on http://localhost:${config.port}`);
     console.log('');
-    console.log('Available endpoints:');
-    console.log('  GET /api/markets              - List markets (sorted by probability)');
-    console.log('  GET /api/markets?sortBy=volume - List markets (sorted by volume)');
-    console.log('  GET /api/markets/:slug        - Get a specific market');
-    console.log('  GET /api/events               - List events with their markets');
-    console.log('  GET /api/health               - Health check');
+    console.log('Public API (for frontend):');
+    console.log('  GET /api/articles              - List news articles');
+    console.log('  GET /api/articles/featured     - Featured articles for hero');
+    console.log('  GET /api/articles/:slug        - Single article');
+    console.log('  GET /api/categories            - List categories');
+    console.log('');
+    console.log('Legacy API (backward compatible):');
+    console.log('  GET /api/markets               - List markets');
+    console.log('  GET /api/markets/:slug         - Single market');
+    console.log('  GET /api/events                - List events');
+    console.log('');
+    console.log('Internal API (admin):');
+    console.log('  POST /api/internal/sync        - Sync with Polymarket');
+    console.log('  POST /api/internal/regenerate  - Regenerate articles');
+    console.log('  GET /api/internal/signals/:id  - View signals for event');
+    console.log('');
+    console.log('Status:');
+    console.log(`  OpenAI: ${config.openai.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
+    console.log(`  Database: ${config.db.useInMemory ? 'In-memory' : 'PostgreSQL'}`);
 });

@@ -1,39 +1,40 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Header from '../components/layout/Header';
-import Sidebar from '../components/layout/Sidebar';
-import ArticleHero from '../components/article/ArticleHero';
-import ArticleCard from '../components/article/ArticleCard';
+import { useParams } from 'next/navigation';
+import Header from '../../../components/layout/Header';
+import Sidebar from '../../../components/layout/Sidebar';
+import ArticleCard from '../../../components/article/ArticleCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export default function Home() {
-    const [featured, setFeatured] = useState(null);
+// Capitalize category name for display
+function formatCategoryName(name) {
+    return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+export default function CategoryPage() {
+    const params = useParams();
+    const categoryName = formatCategoryName(params.name || '');
+
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('publishedAt');
 
     useEffect(() => {
-        fetchArticles();
-    }, [sortBy]);
+        if (params.name) {
+            fetchArticles();
+        }
+    }, [params.name, sortBy]);
 
     const fetchArticles = async () => {
         setLoading(true);
         try {
-            // Fetch featured article
-            const featuredRes = await fetch(`${API_URL}/api/articles/featured?limit=1`);
-            const featuredData = await featuredRes.json();
-            setFeatured(featuredData.articles?.[0] || null);
-
-            // Fetch all articles
-            const articlesRes = await fetch(`${API_URL}/api/articles?limit=20&sort=${sortBy}`);
-            const articlesData = await articlesRes.json();
-
-            // Filter out the featured article from the list
-            const featuredId = featuredData.articles?.[0]?.id;
-            const filteredArticles = articlesData.articles?.filter(a => a.id !== featuredId) || [];
-            setArticles(filteredArticles);
+            const res = await fetch(
+                `${API_URL}/api/articles?category=${encodeURIComponent(categoryName)}&limit=30&sort=${sortBy}`
+            );
+            const data = await res.json();
+            setArticles(data.articles || []);
         } catch (error) {
             console.error('Failed to fetch articles:', error);
         } finally {
@@ -51,8 +52,8 @@ export default function Home() {
                 <section className="content">
                     <div className="content-header">
                         <div>
-                            <h1 className="content-title">Tomorrow's News Today</h1>
-                            <p className="content-subtitle">AI-generated articles about future events with probability predictions</p>
+                            <h1 className="content-title">{categoryName}</h1>
+                            <p className="content-subtitle">Predictions and forecasts in {categoryName.toLowerCase()}</p>
                         </div>
                         <div className="sort-controls">
                             <button
@@ -77,12 +78,6 @@ export default function Home() {
                         </div>
                     ) : (
                         <>
-                            {featured && (
-                                <div className="hero-section">
-                                    <ArticleHero article={featured} />
-                                </div>
-                            )}
-
                             <div className="articles-grid">
                                 {articles.map((article, index) => (
                                     <ArticleCard
@@ -93,9 +88,9 @@ export default function Home() {
                                 ))}
                             </div>
 
-                            {articles.length === 0 && !featured && (
+                            {articles.length === 0 && (
                                 <div className="empty-state">
-                                    <p>No articles yet. Articles will be generated from prediction markets.</p>
+                                    <p>No articles in {categoryName} yet.</p>
                                 </div>
                             )}
                         </>
