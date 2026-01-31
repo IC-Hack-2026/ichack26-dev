@@ -46,9 +46,12 @@ router.get('/', async (req, res) => {
             });
         }
 
+        // Format articles with live probabilities
+        const formattedArticles = await Promise.all(articles.map(formatArticleCard));
+
         res.json({
             count: articles.length,
-            articles: articles.map(formatArticleCard)
+            articles: formattedArticles
         });
     } catch (error) {
         console.error('Error fetching articles:', error.message);
@@ -74,9 +77,12 @@ router.get('/featured', async (req, res) => {
             articles = await db.articles.getFeatured(limit);
         }
 
+        // Format articles with live probabilities
+        const formattedArticles = await Promise.all(articles.map(formatArticleFull));
+
         res.json({
             count: articles.length,
-            articles: articles.map(formatArticleFull)
+            articles: formattedArticles
         });
     } catch (error) {
         console.error('Error fetching featured articles:', error.message);
@@ -102,7 +108,7 @@ router.get('/:slug', async (req, res) => {
             article = await articleGenerator.createArticle(market, prediction);
         }
 
-        res.json(formatArticleFull(article));
+        res.json(await formatArticleFull(article));
     } catch (error) {
         console.error('Error fetching article:', error.message);
         res.status(500).json({ error: 'Failed to fetch article', details: error.message });
@@ -143,15 +149,30 @@ router.get('/meta/categories', async (req, res) => {
     }
 });
 
+// Helper: get live probability for an article (merges latest prediction if available)
+async function getLiveProbability(article) {
+    if (!article.eventId) {
+        return article.probability;
+    }
+
+    const latestPrediction = await db.predictions.getLatestByEventId(article.eventId);
+    if (latestPrediction && latestPrediction.adjustedProbability !== undefined) {
+        return latestPrediction.adjustedProbability;
+    }
+
+    return article.probability;
+}
+
 // Helper: format article for card display (list view)
-function formatArticleCard(article) {
+async function formatArticleCard(article) {
+    const liveProbability = await getLiveProbability(article);
     return {
         id: article.id,
         slug: article.slug,
         headline: article.headline,
         summary: article.summary,
         category: article.category,
-        probability: article.probability,
+        probability: liveProbability,
         imageUrl: article.imageUrl,
         publishedAt: article.publishedAt,
         expiresAt: article.expiresAt
@@ -159,7 +180,8 @@ function formatArticleCard(article) {
 }
 
 // Helper: format article for full display
-function formatArticleFull(article) {
+async function formatArticleFull(article) {
+    const liveProbability = await getLiveProbability(article);
     return {
         id: article.id,
         slug: article.slug,
@@ -167,7 +189,7 @@ function formatArticleFull(article) {
         summary: article.summary,
         body: article.body,
         category: article.category,
-        probability: article.probability,
+        probability: liveProbability,
         imageUrl: article.imageUrl,
         publishedAt: article.publishedAt,
         expiresAt: article.expiresAt,

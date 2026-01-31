@@ -44,3 +44,25 @@ export async function fetchMarket(slug) {
     if (!res.ok) throw new Error('Failed to fetch market');
     return res.json();
 }
+
+// Internal API endpoints for developer panel
+export async function fetchRealtimeSignals({ limit = 50, type = null } = {}) {
+    const params = new URLSearchParams({ limit });
+    if (type) params.set('type', type);
+
+    const res = await fetch(`${API_URL}/api/internal/signals/realtime?${params}`);
+    if (!res.ok) throw new Error('Failed to fetch realtime signals');
+    return res.json();
+}
+
+export async function fetchSuspiciousWallets({ limit = 20 } = {}) {
+    const res = await fetch(`${API_URL}/api/internal/wallets/suspicious?limit=${limit}`);
+    if (!res.ok) throw new Error('Failed to fetch suspicious wallets');
+    return res.json();
+}
+
+export async function fetchStreamStatus() {
+    const res = await fetch(`${API_URL}/api/internal/stream/status`);
+    if (!res.ok) throw new Error('Failed to fetch stream status');
+    return res.json();
+}

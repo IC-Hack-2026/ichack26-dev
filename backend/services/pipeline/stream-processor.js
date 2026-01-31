@@ -165,8 +165,11 @@ class StreamProcessor extends EventEmitter {
             // Record trade in database
             await db.tradeHistory.record(trade);
 
-            // Track wallet activity
-            await walletTracker.trackTrade(trade);
+            // Track wallet activity (only if trade has a wallet address)
+            const walletAddress = trade.maker || trade.taker || trade.address;
+            if (walletAddress) {
+                await walletTracker.trackTrade(trade);
+            }
 
             // Emit trade event
             this.emit('trade', trade);
@@ -512,8 +515,110 @@ class StreamProcessor extends EventEmitter {
 // Create singleton instance
 const streamProcessor = new StreamProcessor();
 
+/**
+ * Generate fake anomalous patterns for testing the dev panel.
+ * These patterns are designed to be clearly suspicious.
+ */
+function startFakePatternGenerator() {
+    const PATTERN_TYPES = ['liquidity-impact', 'wallet-accuracy', 'timing-pattern', 'sniper-cluster'];
+    const SEVERITIES = ['HIGH', 'MEDIUM', 'LOW'];
+    const DIRECTIONS = ['YES', 'NO'];
+
+    function randomChoice(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function randomWallet() {
+        return '0x' + Array.from({ length: 40 }, () =>
+            Math.floor(Math.random() * 16).toString(16)
+        ).join('');
+    }
+
+    function generateFakePattern() {
+        const type = randomChoice(PATTERN_TYPES);
+        const severity = randomChoice(SEVERITIES);
+        const direction = randomChoice(DIRECTIONS);
+        const confidence = 0.7 + Math.random() * 0.25; // 70-95% confidence (suspicious)
+
+        let metadata = {};
+
+        switch (type) {
+            case 'liquidity-impact':
+                // Large trade consuming significant orderbook depth
+                metadata = {
+                    liquidityPercent: (15 + Math.random() * 35).toFixed(2) + '%', // 15-50% of liquidity
+                    tradeSize: Math.floor(10000 + Math.random() * 90000), // $10k-$100k
+                    priceImpact: (2 + Math.random() * 8).toFixed(2) + '%',
+                    address: randomWallet()
+                };
+                break;
+
+            case 'wallet-accuracy':
+                // Wallet with improbably high win rate
+                metadata = {
+                    winRate: 0.85 + Math.random() * 0.14, // 85-99% win rate
+                    totalTrades: Math.floor(15 + Math.random() * 50), // 15-65 trades
+                    profitUsd: Math.floor(5000 + Math.random() * 95000),
+                    avgTradeSize: Math.floor(1000 + Math.random() * 9000),
+                    address: randomWallet()
+                };
+                break;
+
+            case 'timing-pattern':
+                // Unusual trade concentration before resolution
+                metadata = {
+                    hoursBeforeResolution: (0.5 + Math.random() * 4).toFixed(1), // 0.5-4.5 hours
+                    tradeCount: Math.floor(5 + Math.random() * 20),
+                    volumeSpike: (3 + Math.random() * 7).toFixed(1) + 'x', // 3-10x normal
+                    address: randomWallet()
+                };
+                break;
+
+            case 'sniper-cluster':
+                // Coordinated trading from multiple wallets
+                metadata = {
+                    walletCount: Math.floor(3 + Math.random() * 8), // 3-10 wallets
+                    timeWindow: Math.floor(30 + Math.random() * 90), // 30-120 seconds
+                    totalVolume: Math.floor(25000 + Math.random() * 75000),
+                    similarityScore: (0.85 + Math.random() * 0.14).toFixed(2)
+                };
+                break;
+        }
+
+        return {
+            type,
+            eventId: 'test-event-' + Math.floor(Math.random() * 1000),
+            tokenId: 'test-token-' + Math.floor(Math.random() * 1000),
+            confidence,
+            direction,
+            severity,
+            metadata
+        };
+    }
+
+    // Generate a fake pattern every 5 seconds
+    const interval = setInterval(async () => {
+        const pattern = generateFakePattern();
+        await db.detectedPatterns.record(pattern);
+        streamProcessor.detectedSignals++;
+        console.log(`[FakePatternGenerator] Created ${pattern.type} pattern (${pattern.severity})`);
+    }, 5000);
+
+    // Mark the processor as running for the status endpoint
+    streamProcessor.running = true;
+    streamProcessor.startTime = Date.now();
+
+    console.log('FakePatternGenerator: Started - generating anomalous patterns every 5 seconds');
+
+    return interval;
+}
+
+// Start fake pattern generator for testing
+const fakeGeneratorInterval = startFakePatternGenerator();
+
 // Export both class and singleton instance
 module.exports = {
     StreamProcessor,
-    streamProcessor
+    streamProcessor,
+    startFakePatternGenerator
 };

@@ -180,6 +180,27 @@ const articles = {
         if (!category) return store.articles.size;
         return Array.from(store.articles.values())
             .filter(a => a.category === category).length;
+    },
+
+    /**
+     * Update probability for all articles linked to a given eventId
+     * @param {string} eventId - The event ID to match
+     * @param {number} probability - The new probability value
+     * @returns {number} - Number of articles updated
+     */
+    async updateProbability(eventId, probability) {
+        let updatedCount = 0;
+        for (const [id, article] of store.articles.entries()) {
+            if (article.eventId === eventId) {
+                store.articles.set(id, {
+                    ...article,
+                    probability,
+                    probabilityUpdatedAt: new Date().toISOString()
+                });
+                updatedCount++;
+            }
+        }
+        return updatedCount;
     }
 };
 

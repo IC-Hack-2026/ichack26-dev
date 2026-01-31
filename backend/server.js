@@ -11,14 +11,44 @@ const polymarket = require('./services/polymarket/client');
 // Real-time stream processing
 const { streamProcessor } = require('./services/pipeline/stream-processor');
 const predictionEngine = require('./services/prediction/engine');
+const { regenerateArticleForEvent } = require('./services/article/generator');
+
+// Debouncing for article regeneration (max once per 30 seconds per event)
+const REGENERATION_DEBOUNCE_MS = 30000;
+const SIGNIFICANCE_THRESHOLD = 0.05; // 5% adjustment threshold
+const lastRegenerationTime = new Map();
 
 const app = express();
 
 // Set up stream processor event listeners
 streamProcessor.on('signal', async ({ signal, trade, market }) => {
     try {
-        await predictionEngine.processRealTimeSignal(signal, market);
+        const result = await predictionEngine.processRealTimeSignal(signal, market);
         console.log(`[Signal] ${signal.signalType} detected for market ${market?.id || 'unknown'}`);
+
+        // Check if the signal is significant enough to trigger article regeneration
+        const adjustment = Math.abs(result.adjustment);
+        if (adjustment > SIGNIFICANCE_THRESHOLD) {
+            const eventId = signal.eventId || market?.id;
+            if (eventId) {
+                const now = Date.now();
+                const lastRegen = lastRegenerationTime.get(eventId) || 0;
+
+                // Check debounce: only regenerate if enough time has passed
+                if (now - lastRegen >= REGENERATION_DEBOUNCE_MS) {
+                    lastRegenerationTime.set(eventId, now);
+                    console.log(`[Signal] Significant adjustment (${(adjustment * 100).toFixed(1)}%) - triggering article regeneration for event ${eventId}`);
+
+                    // Regenerate article asynchronously (don't block signal processing)
+                    regenerateArticleForEvent(eventId).catch(err => {
+                        console.error(`[Signal] Failed to regenerate article for event ${eventId}:`, err.message);
+                    });
+                } else {
+                    const waitTime = Math.ceil((REGENERATION_DEBOUNCE_MS - (now - lastRegen)) / 1000);
+                    console.log(`[Signal] Significant adjustment but debounced - next regeneration for event ${eventId} in ${waitTime}s`);
+                }
+            }
+        }
     } catch (error) {
         console.error('Error processing real-time signal:', error);
     }
