@@ -1,0 +1,488 @@
+:root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-tertiary: #1a1a24;
+    --bg-card: #151520;
+    --border-color: #2a2a3a;
+    --text-primary: #e8e8ed;
+    --text-secondary: #8888a0;
+    --text-muted: #5a5a70;
+    --color-bid: #00c853;
+    --color-bid-bg: rgba(0, 200, 83, 0.1);
+    --color-ask: #ff1744;
+    --color-ask-bg: rgba(255, 23, 68, 0.1);
+    --color-neutral: #6a6a8a;
+    --color-accent: #00bcd4;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Header */
+.header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-accent);
+}
+
+.nav a {
+    color: var(--text-secondary);
+    margin-left: 2rem;
+    transition: color 0.2s;
+}
+
+.nav a:hover {
+    color: var(--text-primary);
+}
+
+/* Main container */
+main {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Dashboard */
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dashboard-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.dashboard-stats {
+    display: flex;
+    gap: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.dashboard-stats span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+}
+
+/* Market Card */
+.market-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+}
+
+.market-card:hover {
+    border-color: var(--color-accent);
+    transform: translateY(-2px);
+}
+
+.market-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.market-id {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.status {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.status.active {
+    background: var(--color-bid-bg);
+    color: var(--color-bid);
+}
+
+.status.inactive {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+}
+
+.market-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.price-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.price-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.price-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.price-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.price-item.bid .price-value {
+    color: var(--color-bid);
+}
+
+.price-item.ask .price-value {
+    color: var(--color-ask);
+}
+
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.stat-value {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.imbalance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.imbalance-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.imbalance-value {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Market Detail Page */
+.market-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.market-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.market-detail-header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.back-link {
+    color: var(--color-accent);
+    font-size: 0.875rem;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+/* Spread Indicator */
+.spread-indicator {
+    display: flex;
+    gap: 2rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.spread-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.spread-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.spread-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+/* Order Book Table */
+.orderbook-table {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.orderbook-side {
+    display: flex;
+    flex-direction: column;
+}
+
+.orderbook-side.bids {
+    border-right: 1px solid var(--border-color);
+}
+
+.orderbook-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.orderbook-side.bids .orderbook-header {
+    text-align: right;
+}
+
+.orderbook-side.asks .orderbook-header {
+    text-align: left;
+}
+
+.orderbook-rows {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 500px;
+}
+
+.orderbook-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 0.5rem 1rem;
+    position: relative;
+    font-size: 0.8rem;
+}
+
+.orderbook-side.bids .orderbook-row {
+    text-align: right;
+}
+
+.orderbook-side.asks .orderbook-row {
+    text-align: left;
+}
+
+.orderbook-row.best {
+    background: var(--bg-tertiary);
+}
+
+.orderbook-row.empty {
+    color: var(--text-muted);
+}
+
+.orderbook-row:hover:not(.empty) {
+    background: var(--bg-tertiary);
+}
+
+.depth-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 0;
+    opacity: 0.3;
+}
+
+.bid-bar {
+    right: 0;
+    background: var(--color-bid);
+}
+
+.ask-bar {
+    left: 0;
+    background: var(--color-ask);
+}
+
+.cell {
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-mono);
+}
+
+.bid-price {
+    color: var(--color-bid);
+}
+
+.ask-price {
+    color: var(--color-ask);
+}
+
+/* Loading and Error States */
+.loading,
+.error {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-secondary);
+}
+
+.error {
+    color: var(--color-ask);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state p {
+    margin-bottom: 1rem;
+}
+
+/* Refresh indicator */
+.refresh-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.refresh-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-bid);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    main {
+        padding: 1rem;
+    }
+
+    .header {
+        padding: 1rem;
+    }
+
+    .orderbook-table {
+        grid-template-columns: 1fr;
+    }
+
+    .orderbook-side.bids {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .spread-indicator {
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .spread-item {
+        flex: 1;
+        min-width: 100px;
+    }
+}
