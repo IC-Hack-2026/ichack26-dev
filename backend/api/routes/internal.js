@@ -10,6 +10,7 @@ const predictionEngine = require('../../services/prediction/engine');
 const articleGenerator = require('../../services/article/generator');
 const signalRegistry = require('../../services/signals/registry');
 const cache = require('../../services/cache');
+const { streamProcessor } = require('../../services/pipeline/stream-processor');
 
 // POST /api/internal/sync - Trigger sync with Polymarket
 router.post('/sync', async (req, res) => {
@@ -94,6 +95,29 @@ router.post('/regenerate', async (req, res) => {
     }
 });
 
+// GET /api/internal/signals/realtime - Get recent detected patterns
+// NOTE: This route must be defined BEFORE /signals/:eventId to avoid being caught by the wildcard
+router.get('/signals/realtime', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const type = req.query.type;
+
+        let patterns = await db.detectedPatterns.getRecent(limit);
+
+        if (type) {
+            patterns = patterns.filter(p => p.type === type);
+        }
+
+        res.json({
+            patterns,
+            count: patterns.length
+        });
+    } catch (error) {
+        console.error('Realtime signals error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch realtime signals', details: error.message });
+    }
+});
+
 // GET /api/internal/signals/:eventId - Get signals for an event
 router.get('/signals/:eventId', async (req, res) => {
     try {
@@ -128,8 +152,73 @@ router.get('/debug/store', (req, res) => {
         events: db._store.events.size,
         predictions: db._store.predictions.size,
         articles: db._store.articles.size,
-        signals: db._store.signals.size
+        signals: db._store.signals.size,
+        walletProfiles: db._store.walletProfiles.size,
+        tradeHistory: db._store.tradeHistory.length,
+        detectedPatterns: db._store.detectedPatterns.length
     });
+});
+
+// GET /api/internal/wallets/suspicious - Get high-accuracy/suspicious wallets
+// NOTE: This route must be defined BEFORE /wallets/:address to avoid being caught by the wildcard
+router.get('/wallets/suspicious', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const minWinRate = req.query.minWinRate ? parseFloat(req.query.minWinRate) : undefined;
+
+        let wallets = await db.walletProfiles.getSuspicious(limit);
+
+        if (minWinRate !== undefined) {
+            wallets = wallets.filter(w => w.winRate >= minWinRate);
+        }
+
+        res.json({
+            wallets,
+            count: wallets.length
+        });
+    } catch (error) {
+        console.error('Suspicious wallets error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch suspicious wallets', details: error.message });
+    }
+});
+
+// GET /api/internal/wallets/:address - Get wallet profile and trades
+router.get('/wallets/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+
+        const profile = await db.walletProfiles.getByAddress(address);
+        const recentTrades = await db.tradeHistory.getByWallet(address, 50);
+        // Note: db.signals doesn't have getByWalletAddress, so we use an empty array
+        const signals = [];
+
+        res.json({
+            profile,
+            recentTrades,
+            signals
+        });
+    } catch (error) {
+        console.error('Wallet profile error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch wallet profile', details: error.message });
+    }
+});
+
+// GET /api/internal/stream/status - Get stream processor health
+router.get('/stream/status', (req, res) => {
+    try {
+        const status = streamProcessor.getStatus();
+
+        res.json({
+            running: status.running,
+            subscriptionCount: status.subscriptionCount,
+            processedTrades: status.processedTrades,
+            detectedSignals: status.detectedSignals,
+            uptime: status.uptime
+        });
+    } catch (error) {
+        console.error('Stream status error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch stream status', details: error.message });
+    }
 });
 
 module.exports = router;

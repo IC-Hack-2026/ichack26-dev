@@ -8,7 +8,26 @@ const internalRouter = require('./api/routes/internal');
 // Legacy polymarket routes (for backwards compatibility)
 const polymarket = require('./services/polymarket/client');
 
+// Real-time stream processing
+const { streamProcessor } = require('./services/pipeline/stream-processor');
+const predictionEngine = require('./services/prediction/engine');
+
 const app = express();
+
+// Set up stream processor event listeners
+streamProcessor.on('signal', async ({ signal, trade, market }) => {
+    try {
+        await predictionEngine.processRealTimeSignal(signal, market);
+        console.log(`[Signal] ${signal.signalType} detected for market ${market?.id || 'unknown'}`);
+    } catch (error) {
+        console.error('Error processing real-time signal:', error);
+    }
+});
+
+// Handle stream processor errors gracefully (don't crash the server)
+streamProcessor.on('error', (error) => {
+    console.error('Stream processor error:', error.message || error);
+});
 
 // Middleware
 app.use(cors());
@@ -121,6 +140,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Graceful shutdown handling
+process.on('SIGTERM', async () => {
+    await streamProcessor.stop();
+    process.exit(0);
+});
+
 // Start the server
 app.listen(config.port, () => {
     console.log(`\nFuturo News Backend running on http://localhost:${config.port}`);
@@ -137,11 +162,25 @@ app.listen(config.port, () => {
     console.log('  GET /api/events                - List events');
     console.log('');
     console.log('Internal API (admin):');
-    console.log('  POST /api/internal/sync        - Sync with Polymarket');
-    console.log('  POST /api/internal/regenerate  - Regenerate articles');
-    console.log('  GET /api/internal/signals/:id  - View signals for event');
+    console.log('  POST /api/internal/sync           - Sync with Polymarket');
+    console.log('  POST /api/internal/regenerate     - Regenerate articles');
+    console.log('  GET /api/internal/signals/:id     - View signals for event');
+    console.log('  GET /api/internal/signals/realtime - Recent detected patterns');
+    console.log('  GET /api/internal/wallets/suspicious - Suspicious wallets');
+    console.log('  GET /api/internal/wallets/:address - Wallet profile');
+    console.log('  GET /api/internal/stream/status   - Stream processor health');
     console.log('');
     console.log('Status:');
     console.log(`  OpenAI: ${config.openai.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
     console.log(`  Database: ${config.db.useInMemory ? 'In-memory' : 'PostgreSQL'}`);
+    console.log(`  Real-time: ${config.realtime?.enabled ? 'Enabled' : 'Disabled'}`);
+
+    // Start stream processor if real-time is enabled
+    if (config.realtime?.enabled) {
+        streamProcessor.start().then(() => {
+            console.log('Real-time stream processor started');
+        }).catch(err => {
+            console.error('Failed to start stream processor:', err);
+        });
+    }
 });
