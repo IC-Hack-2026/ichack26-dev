@@ -319,6 +319,11 @@ class StreamProcessor extends EventEmitter {
         // Handle orderbook updates
         clobWebSocketClient.on('book', async (data) => {
             const tokenId = data.asset_id || data.assetId || data.market;
+            console.log(`[OrderBook] ${tokenId}:`, JSON.stringify({
+                bids: data.bids?.slice(0, 3),  // Top 3 bids
+                asks: data.asks?.slice(0, 3),  // Top 3 asks
+                timestamp: new Date().toISOString()
+            }));
             if (tokenId) {
                 await this.processOrderBookUpdate(tokenId, data);
             }
@@ -358,6 +363,32 @@ class StreamProcessor extends EventEmitter {
         try {
             // Get active events from database
             const activeEvents = await db.events.getAll({ limit: 50, resolved: false });
+
+            // If no events in DB, fetch top markets from Polymarket API
+            if (activeEvents.length === 0) {
+                const polymarket = require('../polymarket/client');
+                const markets = await polymarket.fetchMarkets({ limit: 20 });
+
+                for (const market of markets) {
+                    // Subscribe using the market's condition ID / clob token IDs
+                    // clobTokenIds is a JSON string, need to parse it
+                    let clobTokenIds = market.rawData?.clobTokenIds;
+                    if (typeof clobTokenIds === 'string') {
+                        try {
+                            clobTokenIds = JSON.parse(clobTokenIds);
+                        } catch {
+                            clobTokenIds = null;
+                        }
+                    }
+                    if (Array.isArray(clobTokenIds)) {
+                        for (const tokenId of clobTokenIds) {
+                            this.subscribeToMarket(tokenId);
+                        }
+                    }
+                }
+                console.log(`StreamProcessor: Auto-subscribed to ${this.subscriptions.size} markets from API`);
+                return;
+            }
 
             for (const event of activeEvents) {
                 // Subscribe to each market's tokens

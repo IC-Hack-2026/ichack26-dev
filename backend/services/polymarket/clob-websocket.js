@@ -231,7 +231,16 @@ class ClobWebSocketClient extends EventEmitter {
     }
 
     _handleMessage(event) {
+        // Log ALL raw WebSocket messages
+        console.log('[WS Raw]', event.data);
+
         try {
+            // Handle non-JSON messages (e.g., "INVALID OPERATION")
+            if (typeof event.data === 'string' && !event.data.startsWith('{') && !event.data.startsWith('[')) {
+                // Skip known non-JSON responses silently
+                return;
+            }
+
             const data = JSON.parse(event.data);
 
             // Handle different message types
@@ -248,7 +257,10 @@ class ClobWebSocketClient extends EventEmitter {
                 this.emit('message', data);
             }
         } catch (error) {
-            this.emit('error', new Error(`Failed to parse WebSocket message: ${error.message}`));
+            // Only log parse errors for messages that look like they should be JSON
+            if (event.data?.startsWith('{') || event.data?.startsWith('[')) {
+                this.emit('error', new Error(`Failed to parse WebSocket message: ${error.message}`));
+            }
         }
     }
 
