@@ -33,3 +33,5 @@ coverage/
 
 # Claude Code
 .claude/
+.editorconfig
+.vscode/
