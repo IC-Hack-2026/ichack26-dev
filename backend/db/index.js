@@ -9,8 +9,17 @@ const store = {
     predictions: new Map(),
     articles: new Map(),
     signals: new Map(),
-    backtestRuns: []
+    backtestRuns: [],
+    // New collections for insider trading detection
+    walletProfiles: new Map(),       // address -> profile object
+    tradeHistory: [],                // Array of trades (capped at 100k, FIFO)
+    detectedPatterns: [],            // Array of detected insider patterns
+    orderbookSnapshots: new Map()    // tokenId -> circular buffer of snapshots
 };
+
+// Constants
+const TRADE_HISTORY_MAX = 100000;
+const ORDERBOOK_SNAPSHOTS_MAX = 100;
 
 // Slugify helper
 function slugify(text) {
@@ -215,12 +224,239 @@ const backtests = {
     }
 };
 
+// Wallet profile operations
+const walletProfiles = {
+    /**
+     * Create or update a wallet profile
+     * Schema: { address, firstTradeAt, lastTradeAt, totalTrades, totalVolume,
+     *           resolvedPositions, wins, losses, winRate, avgProfit,
+     *           avgTradeSize, maxTradeSize, riskScore, suspiciousFlags[] }
+     */
+    async upsert(address, profile) {
+        const normalizedAddress = address.toLowerCase();
+        const existing = store.walletProfiles.get(normalizedAddress);
+        const record = {
+            ...existing,
+            ...profile,
+            address: normalizedAddress,
+            updatedAt: new Date().toISOString()
+        };
+        if (!existing) {
+            record.createdAt = new Date().toISOString();
+        }
+        store.walletProfiles.set(normalizedAddress, record);
+        return record;
+    },
+
+    /**
+     * Get a wallet profile by address
+     */
+    async getByAddress(address) {
+        return store.walletProfiles.get(address.toLowerCase()) || null;
+    },
+
+    /**
+     * List wallet profiles with filters
+     */
+    async getAll({ limit = 50, minWinRate = null, minTrades = null } = {}) {
+        let results = Array.from(store.walletProfiles.values());
+
+        if (minWinRate !== null) {
+            results = results.filter(p => (p.winRate || 0) >= minWinRate);
+        }
+
+        if (minTrades !== null) {
+            results = results.filter(p => (p.totalTrades || 0) >= minTrades);
+        }
+
+        // Sort by total volume descending
+        results.sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0));
+
+        return results.slice(0, limit);
+    },
+
+    /**
+     * Get wallets with suspicious flags
+     */
+    async getSuspicious(limit = 50) {
+        return Array.from(store.walletProfiles.values())
+            .filter(p => p.suspiciousFlags && p.suspiciousFlags.length > 0)
+            .sort((a, b) => (b.suspiciousFlags?.length || 0) - (a.suspiciousFlags?.length || 0))
+            .slice(0, limit);
+    }
+};
+
+// Trade history operations
+const tradeHistory = {
+    /**
+     * Record a trade (auto-prune if exceeds 100k entries)
+     */
+    async record(trade) {
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const record = {
+            id,
+            ...trade,
+            recordedAt: new Date().toISOString()
+        };
+
+        store.tradeHistory.push(record);
+
+        // Auto-prune: FIFO removal if exceeds max
+        while (store.tradeHistory.length > TRADE_HISTORY_MAX) {
+            store.tradeHistory.shift();
+        }
+
+        return record;
+    },
+
+    /**
+     * Get trades by wallet address
+     */
+    async getByWallet(address, limit = 100) {
+        const normalizedAddress = address.toLowerCase();
+        return store.tradeHistory
+            .filter(t => (t.maker?.toLowerCase() === normalizedAddress) ||
+                        (t.taker?.toLowerCase() === normalizedAddress) ||
+                        (t.address?.toLowerCase() === normalizedAddress))
+            .slice(-limit)
+            .reverse();
+    },
+
+    /**
+     * Get trades by market/token ID
+     */
+    async getByMarket(tokenId, limit = 100) {
+        return store.tradeHistory
+            .filter(t => t.tokenId === tokenId || t.marketId === tokenId)
+            .slice(-limit)
+            .reverse();
+    },
+
+    /**
+     * Get most recent trades
+     */
+    async getRecent(limit = 100) {
+        return store.tradeHistory.slice(-limit).reverse();
+    },
+
+    /**
+     * Get trades within a time range
+     */
+    async getInTimeRange(startTime, endTime) {
+        const start = new Date(startTime).getTime();
+        const end = new Date(endTime).getTime();
+
+        return store.tradeHistory.filter(t => {
+            const tradeTime = new Date(t.timestamp || t.recordedAt).getTime();
+            return tradeTime >= start && tradeTime <= end;
+        });
+    }
+};
+
+// Detected patterns operations
+const detectedPatterns = {
+    /**
+     * Record a detected insider pattern
+     */
+    async record(pattern) {
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const record = {
+            id,
+            ...pattern,
+            detectedAt: new Date().toISOString()
+        };
+        store.detectedPatterns.push(record);
+        return record;
+    },
+
+    /**
+     * Get patterns for a specific event
+     */
+    async getByEventId(eventId) {
+        return store.detectedPatterns
+            .filter(p => p.eventId === eventId)
+            .reverse();
+    },
+
+    /**
+     * Get recent patterns
+     */
+    async getRecent(limit = 50) {
+        return store.detectedPatterns.slice(-limit).reverse();
+    },
+
+    /**
+     * Get patterns by type
+     */
+    async getByType(type, limit = 50) {
+        return store.detectedPatterns
+            .filter(p => p.type === type)
+            .slice(-limit)
+            .reverse();
+    }
+};
+
+// Orderbook snapshots operations
+const orderbookSnapshots = {
+    /**
+     * Record a snapshot for a token (keeps last 100 per token)
+     */
+    async record(tokenId, snapshot) {
+        if (!store.orderbookSnapshots.has(tokenId)) {
+            store.orderbookSnapshots.set(tokenId, []);
+        }
+
+        const snapshots = store.orderbookSnapshots.get(tokenId);
+        const record = {
+            ...snapshot,
+            tokenId,
+            recordedAt: new Date().toISOString()
+        };
+
+        snapshots.push(record);
+
+        // Keep only the last 100 snapshots (circular buffer behavior)
+        while (snapshots.length > ORDERBOOK_SNAPSHOTS_MAX) {
+            snapshots.shift();
+        }
+
+        return record;
+    },
+
+    /**
+     * Get the most recent snapshot for a token
+     */
+    async getLatest(tokenId) {
+        const snapshots = store.orderbookSnapshots.get(tokenId);
+        if (!snapshots || snapshots.length === 0) {
+            return null;
+        }
+        return snapshots[snapshots.length - 1];
+    },
+
+    /**
+     * Get recent snapshots for a token
+     */
+    async getHistory(tokenId, count = 10) {
+        const snapshots = store.orderbookSnapshots.get(tokenId);
+        if (!snapshots || snapshots.length === 0) {
+            return [];
+        }
+        return snapshots.slice(-count).reverse();
+    }
+};
+
 module.exports = {
     events,
     predictions,
     articles,
     signals,
     backtests,
+    // New collections for insider trading detection
+    walletProfiles,
+    tradeHistory,
+    detectedPatterns,
+    orderbookSnapshots,
     // Utility
     slugify,
     // For testing/debugging
