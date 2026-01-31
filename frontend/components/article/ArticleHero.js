@@ -10,16 +10,11 @@ export default function ArticleHero({ article }) {
 
     return (
         <Link href={`/article/${article.slug}`} className="article-hero">
-            <div className="article-hero-background">
-                {article.imageUrl && (
-                    <img src={article.imageUrl} alt="" />
-                )}
-                <div className="article-hero-overlay" />
-            </div>
-
             <div className="article-hero-content">
                 <div className="article-hero-meta">
-                    <span className="hero-breaking">BREAKING</span>
+                    {article.probability >= 0.8 && (
+                        <span className="hero-breaking">BREAKING</span>
+                    )}
                     <CategoryPill category={article.category} clickable={false} />
                     <TimeAgo date={article.publishedAt} />
                 </div>
@@ -33,6 +28,12 @@ export default function ArticleHero({ article }) {
                 <div className="article-hero-footer">
                     <ProbabilityBadge probability={article.probability} size="large" />
                 </div>
+            </div>
+
+            <div className="article-hero-image">
+                {article.imageUrl && (
+                    <img src={article.imageUrl} alt="" />
+                )}
             </div>
         </Link>
     );
