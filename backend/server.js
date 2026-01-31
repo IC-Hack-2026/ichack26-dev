@@ -1,114 +1,111 @@
 const express = require('express');
 const cors = require('cors');
-const { v4: uuidv4 } = require('uuid');
+
+// ============================================================
+// IMPORTING MODULES
+// ============================================================
+// require() loads another JavaScript file and returns its exports.
+// Here we import our Polymarket service which handles all API logic.
+// This keeps server.js focused on HTTP routing (its single responsibility).
+// ============================================================
+const polymarket = require('./polymarket');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ============================================================
+// MIDDLEWARE
+// ============================================================
 app.use(cors());
 app.use(express.json());
 
-// In-memory data store
-let tasks = [
-    {
-        id: uuidv4(),
-        title: 'Design system overhaul',
-        description: 'Rebuild the component library with new tokens',
-        status: 'in-progress',
-        priority: 'high',
-        createdAt: new Date().toISOString(),
-    },
-    {
-        id: uuidv4(),
-        title: 'API documentation',
-        description: 'Write comprehensive docs for all endpoints',
-        status: 'todo',
-        priority: 'medium',
-        createdAt: new Date().toISOString(),
-    },
-    {
-        id: uuidv4(),
-        title: 'Performance audit',
-        description: 'Analyze and optimize critical render paths',
-        status: 'done',
-        priority: 'high',
-        createdAt: new Date().toISOString(),
-    },
-];
+// ============================================================
+// ROUTES
+// ============================================================
+// Notice how clean these route handlers are now!
+// They only handle:
+// 1. Extracting parameters from the request
+// 2. Calling the service function
+// 3. Sending the response (or error)
+//
+// All the business logic (API calls, data transformation) lives
+// in the polymarket.js module. This is "separation of concerns".
+// ============================================================
 
-// Get all tasks
-app.get('/api/tasks', (req, res) => {
-    res.json(tasks);
-});
+// GET /api/markets - Fetch markets sorted by probability or volume
+app.get('/api/markets', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const sortBy = req.query.sortBy || 'probability';
 
-// Get single task
-app.get('/api/tasks/:id', (req, res) => {
-    const task = tasks.find(t => t.id === req.params.id);
-    if (!task) {
-        return res.status(404).json({ error: 'Task not found' });
+        // Call our service - it handles all the Polymarket API details
+        const result = await polymarket.getMarkets({ limit, sortBy });
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching markets:', error.message);
+        res.status(500).json({
+            error: 'Failed to fetch markets from Polymarket',
+            details: error.message
+        });
     }
-    res.json(task);
 });
 
-// Create task
-app.post('/api/tasks', (req, res) => {
-    const { title, description, status = 'todo', priority = 'medium' } = req.body;
+// GET /api/markets/:slug - Fetch a single market by its slug
+app.get('/api/markets/:slug', async (req, res) => {
+    try {
+        const { slug } = req.params;
 
-    if (!title) {
-        return res.status(400).json({ error: 'Title is required' });
+        const market = await polymarket.getMarketBySlug(slug);
+
+        res.json(market);
+    } catch (error) {
+        console.error('Error fetching market:', error.message);
+
+        // Check for specific error types and return appropriate status
+        if (error.code === 'NOT_FOUND') {
+            return res.status(404).json({ error: 'Market not found' });
+        }
+
+        res.status(500).json({
+            error: 'Failed to fetch market from Polymarket',
+            details: error.message
+        });
     }
-
-    const task = {
-        id: uuidv4(),
-        title,
-        description: description || '',
-        status,
-        priority,
-        createdAt: new Date().toISOString(),
-    };
-
-    tasks.push(task);
-    res.status(201).json(task);
 });
 
-// Update task
-app.put('/api/tasks/:id', (req, res) => {
-    const index = tasks.findIndex(t => t.id === req.params.id);
+// GET /api/events - Fetch events (groups of related markets)
+app.get('/api/events', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
 
-    if (index === -1) {
-        return res.status(404).json({ error: 'Task not found' });
+        const result = await polymarket.getEvents({ limit });
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching events:', error.message);
+        res.status(500).json({
+            error: 'Failed to fetch events from Polymarket',
+            details: error.message
+        });
     }
-
-    const { title, description, status, priority } = req.body;
-
-    tasks[index] = {
-        ...tasks[index],
-        ...(title && { title }),
-        ...(description !== undefined && { description }),
-        ...(status && { status }),
-        ...(priority && { priority }),
-    };
-
-    res.json(tasks[index]);
 });
 
-// Delete task
-app.delete('/api/tasks/:id', (req, res) => {
-    const index = tasks.findIndex(t => t.id === req.params.id);
-
-    if (index === -1) {
-        return res.status(404).json({ error: 'Task not found' });
-    }
-
-    tasks.splice(index, 1);
-    res.status(204).send();
-});
-
-// Health check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ============================================================
+// START THE SERVER
+// ============================================================
 app.listen(PORT, () => {
-    console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+    console.log(`Backend server running on http://localhost:${PORT}`);
+    console.log('');
+    console.log('Available endpoints:');
+    console.log('  GET /api/markets              - List markets (sorted by probability)');
+    console.log('  GET /api/markets?sortBy=volume - List markets (sorted by volume)');
+    console.log('  GET /api/markets/:slug        - Get a specific market');
+    console.log('  GET /api/events               - List events with their markets');
+    console.log('  GET /api/health               - Health check');
 });
