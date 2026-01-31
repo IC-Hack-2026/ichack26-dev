@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Header from '../components/layout/Header';
-import Sidebar from '../components/layout/Sidebar';
 import ArticleHero from '../components/article/ArticleHero';
 import ArticleCard from '../components/article/ArticleCard';
 
@@ -13,10 +12,11 @@ export default function Home() {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('publishedAt');
+    const [probabilityFilter, setProbabilityFilter] = useState('all');
 
     useEffect(() => {
         fetchArticles();
-    }, [sortBy]);
+    }, [sortBy, probabilityFilter]);
 
     const fetchArticles = async () => {
         setLoading(true);
@@ -32,7 +32,14 @@ export default function Home() {
 
             // Filter out the featured article from the list
             const featuredId = featuredData.articles?.[0]?.id;
-            const filteredArticles = articlesData.articles?.filter(a => a.id !== featuredId) || [];
+            let filteredArticles = articlesData.articles?.filter(a => a.id !== featuredId) || [];
+
+            // Apply probability filter
+            if (probabilityFilter !== 'all') {
+                const threshold = parseFloat(probabilityFilter);
+                filteredArticles = filteredArticles.filter(a => a.probability >= threshold);
+            }
+
             setArticles(filteredArticles);
         } catch (error) {
             console.error('Failed to fetch articles:', error);
@@ -46,27 +53,54 @@ export default function Home() {
             <Header />
 
             <main className="main">
-                <Sidebar />
-
                 <section className="content">
                     <div className="content-header">
                         <div>
                             <h1 className="content-title">Tomorrow's News Today</h1>
                             <p className="content-subtitle">AI-generated articles about future events with probability predictions</p>
                         </div>
-                        <div className="sort-controls">
-                            <button
-                                className={`sort-btn ${sortBy === 'publishedAt' ? 'active' : ''}`}
-                                onClick={() => setSortBy('publishedAt')}
-                            >
-                                Latest
-                            </button>
-                            <button
-                                className={`sort-btn ${sortBy === 'probability' ? 'active' : ''}`}
-                                onClick={() => setSortBy('probability')}
-                            >
-                                Most Likely
-                            </button>
+                        <div className="controls-group">
+                            <div className="sort-controls">
+                                <button
+                                    className={`sort-btn ${sortBy === 'publishedAt' ? 'active' : ''}`}
+                                    onClick={() => setSortBy('publishedAt')}
+                                >
+                                    Latest
+                                </button>
+                                <button
+                                    className={`sort-btn ${sortBy === 'probability' ? 'active' : ''}`}
+                                    onClick={() => setSortBy('probability')}
+                                >
+                                    Most Likely
+                                </button>
+                            </div>
+                            <div className="filter-controls">
+                                <span className="filter-label">Show:</span>
+                                <button
+                                    className={`filter-btn ${probabilityFilter === 'all' ? 'active' : ''}`}
+                                    onClick={() => setProbabilityFilter('all')}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    className={`filter-btn ${probabilityFilter === '0.5' ? 'active' : ''}`}
+                                    onClick={() => setProbabilityFilter('0.5')}
+                                >
+                                    50%+
+                                </button>
+                                <button
+                                    className={`filter-btn ${probabilityFilter === '0.7' ? 'active' : ''}`}
+                                    onClick={() => setProbabilityFilter('0.7')}
+                                >
+                                    70%+
+                                </button>
+                                <button
+                                    className={`filter-btn ${probabilityFilter === '0.9' ? 'active' : ''}`}
+                                    onClick={() => setProbabilityFilter('0.9')}
+                                >
+                                    90%+
+                                </button>
+                            </div>
                         </div>
                     </div>
 
