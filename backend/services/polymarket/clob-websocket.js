@@ -23,8 +23,9 @@ const HEARTBEAT_INTERVAL = config.realtime.heartbeatIntervalMs;
 const RECONNECT_BASE_DELAY = config.realtime.reconnectDelayMs;
 const RECONNECT_MAX_DELAY = config.realtime.reconnectDelayMs * 10; // Max 10x base delay
 
-// Valid event types for subscriptions
-const VALID_EVENTS = ['book', 'price_change', 'last_trade_price'];
+// Event types received from the market channel subscription
+// Note: A single "market" subscription receives all event types
+const VALID_EVENTS = ['book', 'price_change', 'last_trade_price', 'tick_size_change'];
 
 /**
  * Polymarket CLOB WebSocket Client
@@ -166,19 +167,15 @@ class ClobWebSocketClient extends EventEmitter {
             throw new Error('assetId is required');
         }
 
-        const events = this.subscriptions.get(assetId);
-        if (!events) {
+        if (!this.subscriptions.has(assetId)) {
             return;
         }
 
-        // Send unsubscribe messages if connected
+        // Send unsubscribe message if connected
         if (this.isConnected && this.ws) {
-            events.forEach(eventType => {
-                this._send({
-                    type: eventType,
-                    action: 'unsubscribe',
-                    assets_ids: [assetId]
-                });
+            this._send({
+                assets_ids: [assetId],
+                operation: 'unsubscribe'
             });
         }
 
@@ -215,19 +212,22 @@ class ClobWebSocketClient extends EventEmitter {
     }
 
     _sendSubscriptions(assetId, events) {
-        events.forEach(eventType => {
-            this._send({
-                type: eventType,
-                action: 'subscribe',
-                assets_ids: [assetId]
-            });
+        // For dynamic subscriptions after connection is established
+        this._send({
+            assets_ids: [assetId],
+            operation: 'subscribe'
         });
     }
 
     _resubscribeAll() {
-        this.subscriptions.forEach((events, assetId) => {
-            this._sendSubscriptions(assetId, Array.from(events));
-        });
+        // For initial connection and reconnects, use type: "market"
+        const allAssetIds = Array.from(this.subscriptions.keys());
+        if (allAssetIds.length > 0) {
+            this._send({
+                assets_ids: allAssetIds,
+                type: 'market'
+            });
+        }
     }
 
     _handleMessage(event) {
@@ -243,15 +243,16 @@ class ClobWebSocketClient extends EventEmitter {
 
             const data = JSON.parse(event.data);
 
-            // Handle different message types
-            if (data.type === 'book' || data.event_type === 'book') {
+            // Handle different message types from the market channel
+            const eventType = data.event_type || data.type;
+            if (eventType === 'book') {
                 this.emit('book', data);
-            } else if (data.type === 'price_change' || data.event_type === 'price_change') {
+            } else if (eventType === 'price_change') {
                 this.emit('price_change', data);
-            } else if (data.type === 'last_trade_price' || data.event_type === 'last_trade_price') {
+            } else if (eventType === 'last_trade_price') {
                 this.emit('last_trade_price', data);
-            } else if (data.type === 'pong') {
-                // Heartbeat response - ignore
+            } else if (eventType === 'tick_size_change') {
+                this.emit('tick_size_change', data);
             } else {
                 // Unknown message type, emit as generic event
                 this.emit('message', data);
@@ -306,13 +307,8 @@ class ClobWebSocketClient extends EventEmitter {
     }
 
     _startHeartbeat() {
-        this._stopHeartbeat();
-
-        this.heartbeatTimer = setInterval(() => {
-            if (this.isConnected && this.ws) {
-                this._send({ type: 'ping' });
-            }
-        }, HEARTBEAT_INTERVAL);
+        // Polymarket WebSocket doesn't use ping/pong heartbeat
+        // The connection is kept alive by the server
     }
 
     _stopHeartbeat() {
