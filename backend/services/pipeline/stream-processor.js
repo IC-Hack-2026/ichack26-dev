@@ -8,6 +8,7 @@ const EventEmitter = require('events');
 const { clobWebSocketClient } = require('../polymarket/clob-websocket');
 const { walletTracker } = require('../wallet/tracker');
 const { liquidityTracker } = require('../orderbook/liquidity-tracker');
+const { orderBookManager } = require('../orderbook/order-book-manager');
 const db = require('../../db');
 const config = require('../../config');
 
@@ -299,7 +300,8 @@ class StreamProcessor extends EventEmitter {
                 name: p.name,
                 weight: p.weight
             })),
-            realtimeEnabled: this.realtimeConfig.enabled
+            realtimeEnabled: this.realtimeConfig.enabled,
+            orderBooks: orderBookManager.getStatus()
         };
     }
 
@@ -315,12 +317,10 @@ class StreamProcessor extends EventEmitter {
 
         // Handle orderbook updates
         clobWebSocketClient.on('book', async (data) => {
+            // Update in-memory order book
+            orderBookManager.handleBookSnapshot(data);
+
             const tokenId = data.asset_id || data.assetId || data.market;
-            // console.log(`[OrderBook] ${tokenId}:`, JSON.stringify({
-            //     bids: data.bids?.slice(0, 3),  // Top 3 bids
-            //     asks: data.asks?.slice(0, 3),  // Top 3 asks
-            //     timestamp: new Date().toISOString()
-            // }));
             if (tokenId) {
                 await this.processOrderBookUpdate(tokenId, data);
             }
@@ -328,11 +328,18 @@ class StreamProcessor extends EventEmitter {
 
         // Handle price changes (can indicate significant activity)
         clobWebSocketClient.on('price_change', async (data) => {
+            // Update in-memory order book with incremental changes
+            orderBookManager.handlePriceChange(data);
+
             // Price changes are informational, may trigger analysis
-            const tokenId = data.asset_id || data.assetId || data.market;
-            if (tokenId && Math.abs(data.change_percent || data.changePercent || 0) > 5) {
-                // Significant price change - log for monitoring
-                console.log(`StreamProcessor: Significant price change on ${tokenId}: ${data.change_percent || data.changePercent}%`);
+            // Handle both single object and array formats
+            const changes = Array.isArray(data) ? data : [data];
+            for (const change of changes) {
+                const tokenId = change.asset_id || change.assetId || change.market;
+                if (tokenId && Math.abs(change.change_percent || change.changePercent || 0) > 5) {
+                    // Significant price change - log for monitoring
+                    console.log(`StreamProcessor: Significant price change on ${tokenId}: ${change.change_percent || change.changePercent}%`);
+                }
             }
         });
 
@@ -344,6 +351,8 @@ class StreamProcessor extends EventEmitter {
         // Handle disconnection
         clobWebSocketClient.on('disconnected', () => {
             console.log('StreamProcessor: WebSocket disconnected');
+            // Clear order books on disconnect (will be re-initialized on reconnect)
+            orderBookManager.clearAll();
         });
 
         // Handle reconnection

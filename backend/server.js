@@ -4,6 +4,7 @@ const cors = require('cors');
 const config = require('./config');
 const articlesRouter = require('./api/routes/articles');
 const internalRouter = require('./api/routes/internal');
+const orderbookRouter = require('./api/routes/orderbook');
 
 // Legacy polymarket routes (for backwards compatibility)
 const polymarket = require('./services/polymarket/client');
@@ -38,6 +39,9 @@ app.use('/api/articles', articlesRouter);
 
 // Internal API Routes - Admin/debugging
 app.use('/api/internal', internalRouter);
+
+// Order Book API Routes - Real-time order book data
+app.use('/api/orderbook', orderbookRouter);
 
 // Legacy Routes - Keep existing market endpoints for backward compatibility
 app.get('/api/markets', async (req, res) => {
@@ -169,6 +173,11 @@ app.listen(config.port, () => {
     console.log('  GET /api/internal/wallets/suspicious - Suspicious wallets');
     console.log('  GET /api/internal/wallets/:address - Wallet profile');
     console.log('  GET /api/internal/stream/status   - Stream processor health');
+    console.log('');
+    console.log('Order Book API:');
+    console.log('  GET /api/orderbook                - All order books summary');
+    console.log('  GET /api/orderbook/:assetId       - Full order book');
+    console.log('  GET /api/orderbook/:assetId/depth - Top N levels');
     console.log('');
     console.log('Status:');
     console.log(`  OpenAI: ${config.openai.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
