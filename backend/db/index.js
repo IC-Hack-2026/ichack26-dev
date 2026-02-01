@@ -116,12 +116,25 @@ const events = {
         return null;
     },
 
-    async getAll({ limit = 50, category = null, resolved = false } = {}) {
+    async getAll({ limit = 50, category = null, resolved = false, minDaysUntilResolution = null, maxDaysUntilResolution = null } = {}) {
         let results = Array.from(store.events.values())
             .filter(e => e.resolved === resolved);
 
         if (category) {
             results = results.filter(e => e.category === category);
+        }
+
+        // Filter by resolution date range
+        if (minDaysUntilResolution != null || maxDaysUntilResolution != null) {
+            const now = Date.now();
+            const minMs = (minDaysUntilResolution || 0) * 24 * 60 * 60 * 1000;
+            const maxMs = (maxDaysUntilResolution || Infinity) * 24 * 60 * 60 * 1000;
+
+            results = results.filter(e => {
+                if (!e.endDate) return false;
+                const msUntilResolution = new Date(e.endDate).getTime() - now;
+                return msUntilResolution >= minMs && msUntilResolution <= maxMs;
+            });
         }
 
         return results.slice(0, limit);

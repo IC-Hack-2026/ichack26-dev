@@ -19,7 +19,7 @@ export default function CategoryPage() {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('publishedAt');
-    const [probabilityFilter, setProbabilityFilter] = useState('all');
+    const [probabilityFilter, setProbabilityFilter] = useState('0.6');
 
     useEffect(() => {
         if (params.name) {
@@ -37,10 +37,8 @@ export default function CategoryPage() {
             let filteredArticles = data.articles || [];
 
             // Apply probability filter
-            if (probabilityFilter !== 'all') {
-                const threshold = parseFloat(probabilityFilter);
-                filteredArticles = filteredArticles.filter(a => a.probability >= threshold);
-            }
+            const threshold = parseFloat(probabilityFilter);
+            filteredArticles = filteredArticles.filter(a => a.probability >= threshold);
 
             setArticles(filteredArticles);
         } catch (error) {
@@ -79,16 +77,10 @@ export default function CategoryPage() {
                             <div className="filter-controls">
                                 <span className="filter-label">Show:</span>
                                 <button
-                                    className={`filter-btn ${probabilityFilter === 'all' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('all')}
+                                    className={`filter-btn ${probabilityFilter === '0.6' ? 'active' : ''}`}
+                                    onClick={() => setProbabilityFilter('0.6')}
                                 >
-                                    All
-                                </button>
-                                <button
-                                    className={`filter-btn ${probabilityFilter === '0.5' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.5')}
-                                >
-                                    50%+
+                                    60%+
                                 </button>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.7' ? 'active' : ''}`}

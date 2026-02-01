@@ -311,13 +311,22 @@ class StreamProcessor extends EventEmitter {
      */
     async _subscribeToActiveMarkets() {
         try {
-            // Get active events from database
-            const activeEvents = await db.events.getAll({ limit: 100, resolved: false });
+            // Get active events from database WITH date filtering (1-30 days until resolution)
+            const activeEvents = await db.events.getAll({
+                limit: 100,
+                resolved: false,
+                minDaysUntilResolution: 1,
+                maxDaysUntilResolution: 30
+            });
 
-            // If no events in DB, fetch top markets from Polymarket API
+            // If no events in DB, fetch top markets from Polymarket API with same filters
             if (activeEvents.length === 0) {
                 const polymarket = require('../polymarket/client');
-                const markets = await polymarket.fetchMarkets({ limit: 100 });
+                const markets = await polymarket.fetchMarkets({
+                    limit: 100,
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                });
 
                 for (const market of markets) {
                     await this._subscribeToMarketTokens(market.rawData, market.id, market.question || market.title);
