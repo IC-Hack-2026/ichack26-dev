@@ -8,6 +8,7 @@ const path = require('path');
 // Data directory for persistent storage
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const PATTERNS_FILE = path.join(DATA_DIR, 'detected-patterns.json');
+const WHALE_TRADES_FILE = path.join(DATA_DIR, 'whale-trades.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -29,12 +30,36 @@ function loadPersistedPatterns() {
     return [];
 }
 
+// Load persisted whale trades on startup
+function loadPersistedWhaleTrades() {
+    try {
+        if (fs.existsSync(WHALE_TRADES_FILE)) {
+            const data = fs.readFileSync(WHALE_TRADES_FILE, 'utf8');
+            const trades = JSON.parse(data);
+            console.log(`[DB] Loaded ${trades.length} persisted whale trades from disk`);
+            return trades;
+        }
+    } catch (error) {
+        console.error('[DB] Failed to load persisted whale trades:', error.message);
+    }
+    return [];
+}
+
 // Save patterns to disk
 function savePatternsToDisk(patterns) {
     try {
         fs.writeFileSync(PATTERNS_FILE, JSON.stringify(patterns, null, 2));
     } catch (error) {
         console.error('[DB] Failed to save patterns to disk:', error.message);
+    }
+}
+
+// Save whale trades to disk
+function saveWhaleTradesToDisk(trades) {
+    try {
+        fs.writeFileSync(WHALE_TRADES_FILE, JSON.stringify(trades, null, 2));
+    } catch (error) {
+        console.error('[DB] Failed to save whale trades to disk:', error.message);
     }
 }
 
@@ -49,12 +74,14 @@ const store = {
     walletProfiles: new Map(),       // address -> profile object
     tradeHistory: [],                // Array of trades (capped at 100k, FIFO)
     detectedPatterns: loadPersistedPatterns(),  // Load from disk on startup
-    orderbookSnapshots: new Map()    // tokenId -> circular buffer of snapshots
+    orderbookSnapshots: new Map(),   // tokenId -> circular buffer of snapshots
+    whaleTrades: loadPersistedWhaleTrades()     // Load from disk on startup
 };
 
 // Constants
 const TRADE_HISTORY_MAX = 100000;
 const ORDERBOOK_SNAPSHOTS_MAX = 100;
+const WHALE_TRADES_MAX = 10000;
 
 // Slugify helper
 function slugify(text) {
@@ -521,6 +548,84 @@ const orderbookSnapshots = {
     }
 };
 
+// Whale trades operations
+const whaleTrades = {
+    /**
+     * Record a whale trade detection
+     * @param {Object} trade - Whale trade data from WhaleDetector
+     */
+    async record(trade) {
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const record = {
+            id,
+            ...trade,
+            recordedAt: new Date().toISOString()
+        };
+
+        store.whaleTrades.push(record);
+
+        // Auto-prune: FIFO removal if exceeds max
+        while (store.whaleTrades.length > WHALE_TRADES_MAX) {
+            store.whaleTrades.shift();
+        }
+
+        // Persist to disk
+        saveWhaleTradesToDisk(store.whaleTrades);
+
+        return record;
+    },
+
+    /**
+     * Get recent whale trades
+     * @param {number} limit - Maximum number of trades to return
+     */
+    async getRecent(limit = 50) {
+        return store.whaleTrades.slice(-limit).reverse();
+    },
+
+    /**
+     * Get whale trades by asset ID
+     * @param {string} assetId - Asset identifier
+     * @param {number} limit - Maximum number of trades to return
+     */
+    async getByAsset(assetId, limit = 50) {
+        return store.whaleTrades
+            .filter(t => t.assetId === assetId)
+            .slice(-limit)
+            .reverse();
+    },
+
+    /**
+     * Get whale trades within a time range
+     * @param {Date|string|number} startTime - Start of time range
+     * @param {Date|string|number} endTime - End of time range
+     */
+    async getInTimeRange(startTime, endTime) {
+        const start = new Date(startTime).getTime();
+        const end = new Date(endTime).getTime();
+
+        return store.whaleTrades.filter(t => {
+            const tradeTime = new Date(t.timestamp || t.recordedAt).getTime();
+            return tradeTime >= start && tradeTime <= end;
+        });
+    },
+
+    /**
+     * Get total count of whale trades
+     */
+    async count() {
+        return store.whaleTrades.length;
+    },
+
+    /**
+     * Clear all whale trades (useful for testing)
+     */
+    async clear() {
+        store.whaleTrades = [];
+        saveWhaleTradesToDisk(store.whaleTrades);
+    }
+};
+
 module.exports = {
     events,
     predictions,
@@ -532,6 +637,7 @@ module.exports = {
     tradeHistory,
     detectedPatterns,
     orderbookSnapshots,
+    whaleTrades,
     // Utility
     slugify,
     // For testing/debugging

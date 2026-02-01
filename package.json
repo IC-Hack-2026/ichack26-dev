@@ -18,5 +18,8 @@
     "devDependencies": {
         "concurrently": "^8.2.2",
         "kill-port": "^2.0.1"
+    },
+    "dependencies": {
+        "dotenv": "^17.2.3"
     }
 }

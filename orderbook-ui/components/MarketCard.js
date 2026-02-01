@@ -5,6 +5,8 @@ import Link from 'next/link';
 export default function MarketCard({ orderBook }) {
     const {
         assetId,
+        eventTitle,
+        outcome,
         initialized,
         bidLevels,
         askLevels,
@@ -39,14 +41,40 @@ export default function MarketCard({ orderBook }) {
         return 'Balanced';
     };
 
+    const getOutcomeClass = (out) => {
+        if (!out) return '';
+        const lower = out.toLowerCase();
+        if (lower === 'yes') return 'outcome-yes';
+        if (lower === 'no') return 'outcome-no';
+        return '';
+    };
+
     return (
         <Link href={`/market/${encodeURIComponent(assetId)}`} className="market-card">
             <div className="market-card-header">
-                <span className="market-id" title={assetId}>{truncateId(assetId)}</span>
+                <div className="market-title-row">
+                    {eventTitle ? (
+                        <span className="market-title" title={eventTitle}>
+                            {eventTitle.length > 50 ? eventTitle.slice(0, 50) + '...' : eventTitle}
+                        </span>
+                    ) : (
+                        <span className="market-id" title={assetId}>{truncateId(assetId)}</span>
+                    )}
+                    {outcome && (
+                        <span className={`outcome-badge ${getOutcomeClass(outcome)}`}>
+                            {outcome}
+                        </span>
+                    )}
+                </div>
                 <span className={`status ${initialized ? 'active' : 'inactive'}`}>
                     {initialized ? 'Live' : 'Pending'}
                 </span>
             </div>
+            {eventTitle && (
+                <div className="market-id-row">
+                    <span className="market-id-small" title={assetId}>{truncateId(assetId)}</span>
+                </div>
+            )}
 
             <div className="market-card-body">
                 <div className="price-row">

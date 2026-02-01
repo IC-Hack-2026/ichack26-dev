@@ -9,6 +9,9 @@ const { clobWebSocketClient } = require('../polymarket/clob-websocket');
 const { walletTracker } = require('../wallet/tracker');
 const { liquidityTracker } = require('../orderbook/liquidity-tracker');
 const { orderBookManager } = require('../orderbook/order-book-manager');
+const { WhaleDetector } = require('../orderbook/whale-detector');
+const { probabilityAdjuster } = require('../orderbook/probability-adjuster');
+const { assetRegistry } = require('../orderbook/asset-registry');
 const db = require('../../db');
 const config = require('../../config');
 
@@ -39,9 +42,13 @@ class StreamProcessor extends EventEmitter {
             sniperClusterProcessor
         ];
 
+        // Initialize whale detector
+        this.whaleDetector = new WhaleDetector(orderBookManager);
+
         // Statistics
         this.processedTrades = 0;
         this.detectedSignals = 0;
+        this.detectedWhaleTrades = 0;
         this.startTime = null;
 
         // Load config
@@ -294,12 +301,20 @@ class StreamProcessor extends EventEmitter {
             subscriptionCount: this.subscriptions.size,
             processedTrades: this.processedTrades,
             detectedSignals: this.detectedSignals,
+            detectedWhaleTrades: this.detectedWhaleTrades,
             uptime,
             uptimeFormatted: this._formatUptime(uptime),
             processors: this.processors.map(p => ({
                 name: p.name,
                 weight: p.weight
             })),
+            whaleDetector: {
+                config: this.whaleDetector.getConfig()
+            },
+            probabilityAdjuster: {
+                config: probabilityAdjuster.getConfig(),
+                activeSignals: probabilityAdjuster.getAllSignals().length
+            },
             realtimeEnabled: this.realtimeConfig.enabled,
             orderBooks: orderBookManager.getStatus()
         };
@@ -313,6 +328,45 @@ class StreamProcessor extends EventEmitter {
         // Handle trade events
         clobWebSocketClient.on('last_trade_price', async (data) => {
             await this.processTrade(data);
+
+            // Whale detection
+            const whaleResult = this.whaleDetector.analyzeTrade(data);
+            if (whaleResult) {
+                this.detectedWhaleTrades++;
+
+                // Record whale trade in database
+                await db.whaleTrades.record(whaleResult);
+
+                // Update probability adjuster with whale signal
+                probabilityAdjuster.recordWhaleTrade(whaleResult);
+
+                // Update article probability for affected event
+                const event = await this._getEventInfo(whaleResult.assetId);
+                if (event && event.id) {
+                    const baseProbability = this._extractBaseProbability(event);
+                    if (baseProbability !== null) {
+                        const adjustedProbability = probabilityAdjuster.getAdjustedProbability(
+                            whaleResult.assetId,
+                            baseProbability
+                        );
+                        await db.articles.updateProbability(event.id, adjustedProbability);
+                    }
+                }
+
+                // Emit whale trade event
+                this.emit('whale-trade', whaleResult);
+
+                // Get asset metadata for human-readable context
+                const assetMeta = assetRegistry.get(whaleResult.assetId);
+                const contextPrefix = assetMeta && assetMeta.eventTitle
+                    ? `"${assetMeta.eventTitle}" ${assetMeta.outcome || ''} | `
+                    : '';
+
+                console.log(
+                    `[WHALE TRADE] ${contextPrefix}${whaleResult.side} ${whaleResult.size.toFixed(2)} @ ${whaleResult.price.toFixed(4)} ` +
+                    `(${whaleResult.depthPercent.toFixed(1)}% of book, $${whaleResult.notional.toFixed(2)} notional)`
+                );
+            }
         });
 
         // Handle orderbook updates
@@ -376,7 +430,7 @@ class StreamProcessor extends EventEmitter {
                 const markets = await polymarket.fetchMarkets({ limit: 100 });
 
                 for (const market of markets) {
-                    await this._subscribeToMarketTokens(market.rawData?.clobTokenIds, market.id);
+                    await this._subscribeToMarketTokens(market.rawData, market.id, market.question || market.title);
                 }
                 console.log(`StreamProcessor: Auto-subscribed to ${this.subscriptions.size} markets from API`);
                 return;
@@ -384,8 +438,8 @@ class StreamProcessor extends EventEmitter {
 
             // Subscribe to events from database
             for (const event of activeEvents) {
-                // Extract clobTokenIds from rawData (where sync stores it)
-                await this._subscribeToMarketTokens(event.rawData?.clobTokenIds, event.id);
+                // Extract rawData (where sync stores clobTokenIds and outcomes)
+                await this._subscribeToMarketTokens(event.rawData, event.id, event.title);
             }
 
             console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets from DB`);
@@ -396,12 +450,18 @@ class StreamProcessor extends EventEmitter {
 
     /**
      * Helper to subscribe to market tokens and optionally generate article
-     * @param {string|Array} clobTokenIds - Token IDs (may be JSON string or array)
+     * @param {Object} rawData - Raw market data containing clobTokenIds and outcomes
      * @param {string} eventId - Event ID for article generation
+     * @param {string} eventTitle - Human-readable event title/question
      * @private
      */
-    async _subscribeToMarketTokens(clobTokenIds, eventId) {
-        // Parse if it's a JSON string
+    async _subscribeToMarketTokens(rawData, eventId, eventTitle) {
+        if (!rawData) {
+            return;
+        }
+
+        // Parse clobTokenIds if it's a JSON string
+        let clobTokenIds = rawData.clobTokenIds;
         if (typeof clobTokenIds === 'string') {
             try {
                 clobTokenIds = JSON.parse(clobTokenIds);
@@ -414,7 +474,33 @@ class StreamProcessor extends EventEmitter {
             return;
         }
 
-        for (const tokenId of clobTokenIds) {
+        // Parse outcomes if it's a JSON string
+        let outcomes = rawData.outcomes;
+        if (typeof outcomes === 'string') {
+            try {
+                outcomes = JSON.parse(outcomes);
+            } catch {
+                outcomes = null;
+            }
+        }
+
+        // Default outcomes if not provided
+        if (!Array.isArray(outcomes)) {
+            outcomes = ['Yes', 'No'];
+        }
+
+        for (let i = 0; i < clobTokenIds.length; i++) {
+            const tokenId = clobTokenIds[i];
+            const outcome = outcomes[i] || (i === 0 ? 'Yes' : 'No');
+
+            // Register asset metadata
+            assetRegistry.register(tokenId, {
+                eventId,
+                eventTitle,
+                outcome,
+                outcomeIndex: i
+            });
+
             // Only subscribe if not already subscribed
             if (!this.subscriptions.has(tokenId)) {
                 this.subscribeToMarket(tokenId);
@@ -521,6 +607,56 @@ class StreamProcessor extends EventEmitter {
                     if (market.clobTokenIds && market.clobTokenIds.includes(tokenId)) {
                         return event;
                     }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract base probability from event data
+     * @param {Object} event - Event object
+     * @returns {number|null} Base probability or null if not available
+     * @private
+     */
+    _extractBaseProbability(event) {
+        if (!event) return null;
+
+        // Try to get probability from rawData
+        if (event.rawData) {
+            // Polymarket stores outcome prices as probabilities
+            if (event.rawData.outcomePrices) {
+                try {
+                    const prices = typeof event.rawData.outcomePrices === 'string'
+                        ? JSON.parse(event.rawData.outcomePrices)
+                        : event.rawData.outcomePrices;
+                    if (Array.isArray(prices) && prices.length > 0) {
+                        return parseFloat(prices[0]) || null;
+                    }
+                } catch {
+                    // Ignore parse errors
+                }
+            }
+
+            if (event.rawData.probability !== undefined) {
+                return parseFloat(event.rawData.probability);
+            }
+        }
+
+        // Try markets array
+        if (event.markets && event.markets.length > 0) {
+            const market = event.markets[0];
+            if (market.outcomePrices) {
+                try {
+                    const prices = typeof market.outcomePrices === 'string'
+                        ? JSON.parse(market.outcomePrices)
+                        : market.outcomePrices;
+                    if (Array.isArray(prices) && prices.length > 0) {
+                        return parseFloat(prices[0]) || null;
+                    }
+                } catch {
+                    // Ignore parse errors
                 }
             }
         }

@@ -8,6 +8,7 @@ const db = require('../../db');
 const polymarket = require('../../services/polymarket/client');
 const predictionEngine = require('../../services/prediction/engine');
 const articleGenerator = require('../../services/article/generator');
+const { probabilityAdjuster } = require('../../services/orderbook/probability-adjuster');
 const ragService = require('../../services/rag');
 const config = require('../../config');
 
@@ -205,9 +206,57 @@ async function getLiveProbability(article) {
     return article.probability;
 }
 
+// Helper: get adjusted probability based on whale trade signals
+function getAdjustedProbability(article, baseProbability) {
+    // Get asset ID from article's event data
+    const assetId = getAssetIdFromArticle(article);
+    if (!assetId) {
+        return baseProbability;
+    }
+
+    return probabilityAdjuster.getAdjustedProbability(assetId, baseProbability);
+}
+
+// Helper: get whale activity for an article
+function getWhaleActivity(article) {
+    const assetId = getAssetIdFromArticle(article);
+    if (!assetId) {
+        return null;
+    }
+
+    return probabilityAdjuster.getWhaleActivity(assetId);
+}
+
+// Helper: extract asset ID from article's raw data
+function getAssetIdFromArticle(article) {
+    if (!article.eventId) {
+        return null;
+    }
+
+    // The asset ID might be stored in rawData.clobTokenIds
+    // This is a simplified extraction - in practice you may need to look up the event
+    if (article.rawData && article.rawData.clobTokenIds) {
+        try {
+            const tokenIds = typeof article.rawData.clobTokenIds === 'string'
+                ? JSON.parse(article.rawData.clobTokenIds)
+                : article.rawData.clobTokenIds;
+            if (Array.isArray(tokenIds) && tokenIds.length > 0) {
+                return tokenIds[0];
+            }
+        } catch {
+            // Ignore parse errors
+        }
+    }
+
+    return article.eventId;
+}
+
 // Helper: format article for card display (list view)
 async function formatArticleCard(article) {
     const liveProbability = await getLiveProbability(article);
+    const adjustedProbability = getAdjustedProbability(article, liveProbability);
+    const whaleActivity = getWhaleActivity(article);
+
     return {
         id: article.id,
         slug: article.slug,
@@ -215,6 +264,8 @@ async function formatArticleCard(article) {
         summary: article.summary,
         category: article.category,
         probability: liveProbability,
+        adjustedProbability,
+        whaleActivity,
         imageUrl: article.imageUrl,
         publishedAt: article.publishedAt,
         expiresAt: article.expiresAt
@@ -224,6 +275,9 @@ async function formatArticleCard(article) {
 // Helper: format article for full display
 async function formatArticleFull(article) {
     const liveProbability = await getLiveProbability(article);
+    const adjustedProbability = getAdjustedProbability(article, liveProbability);
+    const whaleActivity = getWhaleActivity(article);
+
     return {
         id: article.id,
         slug: article.slug,
@@ -232,6 +286,8 @@ async function formatArticleFull(article) {
         body: article.body,
         category: article.category,
         probability: liveProbability,
+        adjustedProbability,
+        whaleActivity,
         imageUrl: article.imageUrl,
         publishedAt: article.publishedAt,
         expiresAt: article.expiresAt,

@@ -11,6 +11,8 @@ const articleGenerator = require('../../services/article/generator');
 const signalRegistry = require('../../services/signals/registry');
 const cache = require('../../services/cache');
 const { streamProcessor } = require('../../services/pipeline/stream-processor');
+const { probabilityAdjuster } = require('../../services/orderbook/probability-adjuster');
+const { assetRegistry } = require('../../services/orderbook/asset-registry');
 
 // POST /api/internal/sync - Trigger sync with Polymarket
 router.post('/sync', async (req, res) => {
@@ -51,7 +53,7 @@ router.post('/sync', async (req, res) => {
             await articleGenerator.createArticle(market, prediction);
             results.articles++;
 
-            // Subscribe to market's token IDs for real-time updates
+            // Subscribe to market's token IDs for real-time updates and register asset metadata
             let clobTokenIds = market.rawData?.clobTokenIds;
             if (typeof clobTokenIds === 'string') {
                 try {
@@ -60,8 +62,33 @@ router.post('/sync', async (req, res) => {
                     clobTokenIds = null;
                 }
             }
+
+            // Parse outcomes from rawData
+            let outcomes = market.rawData?.outcomes;
+            if (typeof outcomes === 'string') {
+                try {
+                    outcomes = JSON.parse(outcomes);
+                } catch {
+                    outcomes = null;
+                }
+            }
+            if (!Array.isArray(outcomes)) {
+                outcomes = ['Yes', 'No'];
+            }
+
             if (Array.isArray(clobTokenIds)) {
-                for (const tokenId of clobTokenIds) {
+                for (let i = 0; i < clobTokenIds.length; i++) {
+                    const tokenId = clobTokenIds[i];
+                    const outcome = outcomes[i] || (i === 0 ? 'Yes' : 'No');
+
+                    // Register asset metadata for order book display
+                    assetRegistry.register(tokenId, {
+                        eventId: market.id,
+                        eventTitle: market.question || market.title,
+                        outcome,
+                        outcomeIndex: i
+                    });
+
                     if (!streamProcessor.subscriptions.has(tokenId)) {
                         streamProcessor.subscribeToMarket(tokenId);
                         results.subscriptions++;
@@ -175,7 +202,8 @@ router.get('/debug/store', (req, res) => {
         signals: db._store.signals.size,
         walletProfiles: db._store.walletProfiles.size,
         tradeHistory: db._store.tradeHistory.length,
-        detectedPatterns: db._store.detectedPatterns.length
+        detectedPatterns: db._store.detectedPatterns.length,
+        whaleTrades: db._store.whaleTrades.length
     });
 });
 
@@ -233,11 +261,57 @@ router.get('/stream/status', (req, res) => {
             subscriptionCount: status.subscriptionCount,
             processedTrades: status.processedTrades,
             detectedSignals: status.detectedSignals,
-            uptime: status.uptime
+            detectedWhaleTrades: status.detectedWhaleTrades,
+            uptime: status.uptime,
+            whaleDetector: status.whaleDetector,
+            probabilityAdjuster: status.probabilityAdjuster
         });
     } catch (error) {
         console.error('Stream status error:', error.message);
         res.status(500).json({ error: 'Failed to fetch stream status', details: error.message });
+    }
+});
+
+// GET /api/internal/whale-trades - List recent whale trade detections
+router.get('/whale-trades', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const assetId = req.query.assetId;
+
+        let trades;
+        if (assetId) {
+            trades = await db.whaleTrades.getByAsset(assetId, limit);
+        } else {
+            trades = await db.whaleTrades.getRecent(limit);
+        }
+
+        const totalCount = await db.whaleTrades.count();
+
+        res.json({
+            trades,
+            count: trades.length,
+            totalCount
+        });
+    } catch (error) {
+        console.error('Whale trades error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch whale trades', details: error.message });
+    }
+});
+
+// GET /api/internal/probability-signals - List active probability adjustment signals
+router.get('/probability-signals', (req, res) => {
+    try {
+        const signals = probabilityAdjuster.getAllSignals();
+        const config = probabilityAdjuster.getConfig();
+
+        res.json({
+            signals,
+            count: signals.length,
+            config
+        });
+    } catch (error) {
+        console.error('Probability signals error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch probability signals', details: error.message });
     }
 });
 
