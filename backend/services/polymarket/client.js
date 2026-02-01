@@ -40,7 +40,12 @@ function categorizeMarket(market) {
         return 'Politics';
     }
 
-    // Sports
+    // Crypto (check BEFORE Sports - crypto terms should take priority over generic sports terms like "game")
+    if (text.match(/\b(crypto|cryptocurrency|bitcoin|ethereum|btc|eth|token|blockchain|defi|nft|web3|wallet|mining|altcoin|stablecoin|solana|cardano|dogecoin)\b/)) {
+        return 'Crypto';
+    }
+
+    // Sports (after Crypto to avoid "game"/"team" false positives from crypto gaming)
     if (text.match(/\b(sport|nfl|nba|mlb|nhl|mls|ufc|mma|boxing|soccer|football|basketball|baseball|hockey|tennis|golf)\b/) ||
         text.match(/\b(game|match|team|player|championship|league|playoff|finals|tournament|cup|medal|olympic|super bowl)\b/) ||
         text.match(/\b(coach|draft|trade|mvp|score|win|lose|season|world series|stanley cup)\b/)) {
@@ -64,11 +69,6 @@ function categorizeMarket(market) {
     if (text.match(/\b(ai|artificial intelligence|tech|technology|apple|google|microsoft|amazon|meta|tesla|spacex)\b/) ||
         text.match(/\b(launch|rocket|satellite|software|hardware|chip|semiconductor|robot|autonomous|startup|silicon valley)\b/)) {
         return 'Technology';
-    }
-
-    // Crypto (check LAST to avoid false positives from terms like "token" that might appear in other contexts)
-    if (text.match(/\b(crypto|cryptocurrency|bitcoin|ethereum|btc|eth|token|blockchain|defi|nft|web3|wallet|mining|altcoin|stablecoin|solana|cardano|dogecoin)\b/)) {
-        return 'Crypto';
     }
 
     return 'Other';
@@ -99,14 +99,29 @@ function transformMarket(market) {
     };
 }
 
+// Fetch available tags from Polymarket
+async function fetchTags() {
+    const cacheKey = 'polymarket:tags';
+
+    return cache.getOrSet(cacheKey, async () => {
+        const apiUrl = `${POLYMARKET_API}/tags`;
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error(`Polymarket API error: ${response.status}`);
+        }
+        return await response.json();
+    }, config.cache.eventTTL);
+}
+
 // Fetch markets from Polymarket
 async function fetchMarkets({
     limit = 50,
     sortBy = 'volume',
+    tag = null,
     minDaysUntilResolution = null,
     maxDaysUntilResolution = null
 } = {}) {
-    const cacheKey = `markets:${limit}:${sortBy}:${minDaysUntilResolution}:${maxDaysUntilResolution}`;
+    const cacheKey = `markets:${limit}:${sortBy}:${tag}:${minDaysUntilResolution}:${maxDaysUntilResolution}`;
 
     return cache.getOrSet(cacheKey, async () => {
         // Determine sort order based on sortBy parameter
@@ -120,6 +135,11 @@ async function fetchMarkets({
 
         // Build API URL with optional date filtering
         let apiUrl = `${POLYMARKET_API}/markets?active=true&closed=false&limit=${limit}&order=${orderParam}&ascending=${ascendingParam}`;
+
+        // Add tag filtering if specified
+        if (tag) {
+            apiUrl += `&tag=${encodeURIComponent(tag)}`;
+        }
 
         // Add server-side date filtering if specified
         if (minDaysUntilResolution != null || maxDaysUntilResolution != null) {
@@ -141,6 +161,12 @@ async function fetchMarkets({
 
         const rawMarkets = await response.json();
         let markets = rawMarkets.map(transformMarket);
+
+        // Filter by allowed categories if configured
+        const allowedCategories = config.article?.allowedCategories;
+        if (allowedCategories && allowedCategories.length > 0) {
+            markets = markets.filter(m => allowedCategories.includes(m.category));
+        }
 
         // Sort
         if (sortBy === 'probability') {
@@ -197,7 +223,7 @@ async function fetchEvents({ limit = 20 } = {}) {
 
         const rawEvents = await response.json();
 
-        return rawEvents.map(event => ({
+        let events = rawEvents.map(event => ({
             id: event.id,
             title: event.title,
             slug: event.slug,
@@ -208,6 +234,14 @@ async function fetchEvents({ limit = 20 } = {}) {
             markets: (event.markets || []).map(m => transformMarket(m)),
             url: `https://polymarket.com/event/${event.slug}`
         }));
+
+        // Filter by allowed categories if configured
+        const allowedCategories = config.article?.allowedCategories;
+        if (allowedCategories && allowedCategories.length > 0) {
+            events = events.filter(e => allowedCategories.includes(e.category));
+        }
+
+        return events;
     }, config.cache.eventTTL);
 }
 
@@ -215,6 +249,7 @@ module.exports = {
     fetchMarkets,
     fetchMarketBySlug,
     fetchEvents,
+    fetchTags,
     transformMarket,
     categorizeMarket,
     parseOutcomes

@@ -102,24 +102,21 @@ async function searchTavily(query, limit = 5) {
     }));
 }
 
-// Generate summary for a related article using OpenAI
+// Generate summary for a related article using Claude
 async function generateSummary(articleTitle, articleDescription, mainHeadline) {
-    if (!config.openai.apiKey) {
+    if (!config.anthropic.apiKey) {
         // Fallback: use the description as-is, trimmed
         return articleDescription?.substring(0, 200) || 'Related news story.';
     }
 
     try {
-        const { default: OpenAI } = await import('openai');
-        const openai = new OpenAI({ apiKey: config.openai.apiKey });
+        const Anthropic = (await import('@anthropic-ai/sdk')).default;
+        const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-        const response = await openai.chat.completions.create({
-            model: config.openai.model,
+        const response = await anthropic.messages.create({
+            model: config.anthropic.model,
+            system: 'You are a news editor. Write a brief 1-2 sentence summary explaining how this related article connects to the main story. Be concise and informative.',
             messages: [
-                {
-                    role: 'system',
-                    content: 'You are a news editor. Write a brief 1-2 sentence summary explaining how this related article connects to the main story. Be concise and informative.'
-                },
                 {
                     role: 'user',
                     content: `Main Story Headline: ${mainHeadline}
@@ -134,7 +131,7 @@ Write a brief summary (max 100 words) explaining the connection and key points f
             temperature: 0.5
         });
 
-        return response.choices[0].message.content.trim();
+        return response.content[0].text.trim();
     } catch (error) {
         console.error('Failed to generate summary:', error.message);
         return articleDescription?.substring(0, 200) || 'Related news story.';

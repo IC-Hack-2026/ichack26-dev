@@ -24,10 +24,10 @@ module.exports = {
         useInMemory: !process.env.REDIS_URL
     },
 
-    // OpenAI
-    openai: {
-        apiKey: process.env.OPENAI_API_KEY || '',
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
+    // Anthropic (Claude)
+    anthropic: {
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
     },
 
     // Polymarket API
@@ -98,7 +98,9 @@ module.exports = {
     // Article generation settings
     article: {
         maxLength: 800,
-        summaryLength: 150
+        summaryLength: 150,
+        // Only generate articles for these categories (empty = all categories)
+        allowedCategories: (process.env.ALLOWED_CATEGORIES || 'World,Finance,Sports,Politics,Technology').split(',').map(c => c.trim()).filter(Boolean)
     },
 
     // RAG (Related News Search) settings

@@ -94,6 +94,17 @@ app.get('/api/events', async (req, res) => {
     }
 });
 
+// Tags endpoint - returns Polymarket native tags
+app.get('/api/tags', async (req, res) => {
+    try {
+        const tags = await polymarket.fetchTags();
+        res.json({ tags });
+    } catch (error) {
+        console.error('Error fetching tags:', error.message);
+        res.status(500).json({ error: 'Failed to fetch tags' });
+    }
+});
+
 // Categories endpoint
 app.get('/api/categories', async (req, res) => {
     try {
@@ -130,7 +141,7 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         services: {
             polymarket: 'connected',
-            openai: config.openai.apiKey ? 'configured' : 'not-configured',
+            claude: config.anthropic.apiKey ? 'configured' : 'not-configured',
             database: config.db.useInMemory ? 'in-memory' : 'postgresql',
             cache: config.redis.useInMemory ? 'in-memory' : 'redis'
         }
@@ -173,7 +184,7 @@ app.listen(config.port, () => {
     console.log('  GET /api/orderbook/:assetId/depth - Top N levels');
     console.log('');
     console.log('Status:');
-    console.log(`  OpenAI: ${config.openai.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
+    console.log(`  Claude: ${config.anthropic.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
     console.log(`  Database: ${config.db.useInMemory ? 'In-memory' : 'PostgreSQL'}`);
     console.log(`  Real-time: ${config.realtime?.enabled ? 'Enabled' : 'Disabled'}`);
 
