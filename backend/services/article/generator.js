@@ -119,6 +119,31 @@ Write in a serious, journalistic tone similar to Reuters or AP News. Be factual 
     }
 }
 
+// Interpret Yes/No outcome from question text
+function interpretBinaryOutcome(question, outcomeName) {
+    if (!question || (outcomeName !== 'Yes' && outcomeName !== 'No')) {
+        return null;
+    }
+
+    // Clean up the question
+    let interpreted = question
+        .replace(/\?$/, '')  // Remove trailing ?
+        .replace(/^Will\s+/i, '')  // "Will X happen" -> "X happen"
+        .replace(/^Does\s+/i, '')  // "Does X happen" -> "X happen"
+        .replace(/^Is\s+/i, '');   // "Is X true" -> "X true"
+
+    if (outcomeName === 'No') {
+        // Negate the outcome
+        // "Trump win" -> "Trump does not win"
+        const words = interpreted.split(' ');
+        if (words.length >= 2) {
+            interpreted = words[0] + ' does not ' + words.slice(1).join(' ');
+        }
+    }
+
+    return interpreted;
+}
+
 function buildPrompt(event, probabilityPercent, relatedNews = []) {
     const eventTitle = event.title || event.question;
     const eventDescription = event.description || '';
@@ -129,13 +154,34 @@ function buildPrompt(event, probabilityPercent, relatedNews = []) {
         const sorted = [...event.outcomes].sort((a, b) => (b.probability || 0) - (a.probability || 0));
         const favorite = sorted[0];
         const favoritePercent = Math.round((favorite.probability || 0) * 100);
-        outcomesContext = `
+
+        // Check if this is a binary Yes/No question
+        const isBinaryQuestion = event.outcomes.length === 2 &&
+            event.outcomes.some(o => o.name === 'Yes') &&
+            event.outcomes.some(o => o.name === 'No');
+
+        if (isBinaryQuestion) {
+            const interpreted = interpretBinaryOutcome(eventTitle, favorite.name);
+            if (interpreted) {
+                outcomesContext = `
+
+PREDICTED OUTCOME (${favoritePercent}% probability):
+${interpreted}
+
+IMPORTANT: Write the headline stating this outcome as fact. Be specific about WHO or WHAT.`;
+            }
+        }
+
+        // Fall back to original format for non-binary or if interpretation failed
+        if (!outcomesContext) {
+            outcomesContext = `
 
 OUTCOME DATA (use this for the headline):
 - FAVORED OUTCOME: ${favorite.name} (${favoritePercent}% probability)
 - Other outcomes: ${sorted.slice(1).map(o => `${o.name} (${Math.round((o.probability || 0) * 100)}%)`).join(', ')}
 
 IMPORTANT: Write the headline as if "${favorite.name}" is the outcome. Be decisive and specific.`;
+        }
     }
 
     // Build related news context section (descriptions only, no titles to avoid influencing headlines)
