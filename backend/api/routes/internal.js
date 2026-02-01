@@ -282,6 +282,40 @@ router.get('/stream/status', (req, res) => {
     }
 });
 
+// Helper function to find event metadata by token ID from database
+async function findEventByTokenId(tokenId) {
+    const events = await db.events.getAll({ limit: 500 });
+
+    for (const event of events) {
+        if (!event.rawData) continue;
+
+        let clobTokenIds = event.rawData.clobTokenIds;
+        if (typeof clobTokenIds === 'string') {
+            try { clobTokenIds = JSON.parse(clobTokenIds); } catch { continue; }
+        }
+
+        if (!Array.isArray(clobTokenIds)) continue;
+
+        const tokenIndex = clobTokenIds.indexOf(tokenId);
+        if (tokenIndex !== -1) {
+            // Parse outcomes
+            let outcomes = event.rawData.outcomes;
+            if (typeof outcomes === 'string') {
+                try { outcomes = JSON.parse(outcomes); } catch { outcomes = ['Yes', 'No']; }
+            }
+            if (!Array.isArray(outcomes)) outcomes = ['Yes', 'No'];
+
+            return {
+                id: event.id,
+                title: event.title,
+                outcome: outcomes[tokenIndex] || (tokenIndex === 0 ? 'Yes' : 'No')
+            };
+        }
+    }
+
+    return null;
+}
+
 // GET /api/internal/whale-trades - List recent whale trade detections
 router.get('/whale-trades', async (req, res) => {
     try {
@@ -295,11 +329,51 @@ router.get('/whale-trades', async (req, res) => {
             trades = await db.whaleTrades.getRecent(limit);
         }
 
+        // Enrich trades with event metadata (in-memory registry first, then database fallback)
+        const enrichedTrades = await Promise.all(trades.map(async (trade) => {
+            // Calculate probability delta based on whale trade formula
+            // delta = direction * Math.min(depthPercent / 20, 1) * 0.15
+            const direction = trade.side === 'BUY' ? 1 : -1;
+            const strength = Math.min((trade.depthPercent || 0) / 20, 1);
+            const probabilityDelta = direction * strength * 0.15;
+
+            // If metadata already exists, return with delta
+            if (trade.eventTitle) {
+                return { ...trade, probabilityDelta };
+            }
+
+            // Try in-memory registry first (fast path)
+            const assetMeta = assetRegistry.get(trade.assetId);
+            if (assetMeta?.eventTitle) {
+                return {
+                    ...trade,
+                    probabilityDelta,
+                    eventTitle: assetMeta.eventTitle,
+                    outcome: assetMeta.outcome,
+                    eventId: assetMeta.eventId
+                };
+            }
+
+            // Fallback: Search database for event containing this token
+            const eventMeta = await findEventByTokenId(trade.assetId);
+            if (eventMeta) {
+                return {
+                    ...trade,
+                    probabilityDelta,
+                    eventTitle: eventMeta.title,
+                    outcome: eventMeta.outcome,
+                    eventId: eventMeta.id
+                };
+            }
+
+            return { ...trade, probabilityDelta };
+        }));
+
         const totalCount = await db.whaleTrades.count();
 
         res.json({
-            trades,
-            count: trades.length,
+            trades: enrichedTrades,
+            count: enrichedTrades.length,
             totalCount
         });
     } catch (error) {

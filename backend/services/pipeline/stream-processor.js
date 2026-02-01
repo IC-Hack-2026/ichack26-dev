@@ -161,6 +161,9 @@ class StreamProcessor extends EventEmitter {
             // Emit trade event
             this.emit('trade', trade);
 
+            // Log every trade
+            console.log(`[TRADE] ${trade.side} ${trade.size} @ ${trade.price} | token: ${trade.tokenId?.slice(0, 8)}...`);
+
             this.processedTrades++;
         } catch (error) {
             this.emit('error', error);
@@ -224,8 +227,16 @@ class StreamProcessor extends EventEmitter {
             if (whaleResult) {
                 this.detectedWhaleTrades++;
 
-                // Record whale trade in database
-                await db.whaleTrades.record(whaleResult);
+                // Get asset metadata NOW, at recording time (before it might be lost on restart)
+                const assetMeta = assetRegistry.get(whaleResult.assetId);
+
+                // Record whale trade in database with metadata included
+                await db.whaleTrades.record({
+                    ...whaleResult,
+                    eventTitle: assetMeta?.eventTitle || null,
+                    outcome: assetMeta?.outcome || null,
+                    eventId: assetMeta?.eventId || null
+                });
 
                 // Update probability adjuster with whale signal
                 probabilityAdjuster.recordWhaleTrade(whaleResult);
@@ -246,8 +257,7 @@ class StreamProcessor extends EventEmitter {
                 // Emit whale trade event
                 this.emit('whale-trade', whaleResult);
 
-                // Get asset metadata for human-readable context
-                const assetMeta = assetRegistry.get(whaleResult.assetId);
+                // Use existing asset metadata for human-readable context (already fetched above)
                 const contextPrefix = assetMeta && assetMeta.eventTitle
                     ? `"${assetMeta.eventTitle}" ${assetMeta.outcome || ''} | `
                     : '';

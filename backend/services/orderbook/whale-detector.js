@@ -86,7 +86,7 @@ class WhaleDetector {
             spreadPercent: spreadInfo.spreadPercent,
             midPrice: spreadInfo.midPrice,
             imbalance: stats.imbalance,
-            timestamp: tradeData.timestamp || Date.now()
+            timestamp: new Date(Number(tradeData.timestamp) || Date.now()).toISOString()
         };
     }
 

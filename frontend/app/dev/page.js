@@ -2,16 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Header from '../../components/layout/Header';
-import { fetchRealtimeSignals, fetchStreamStatus } from '../../lib/api';
-
-const PATTERN_TYPES = [
-    { id: 'all', label: 'All' },
-    { id: 'fresh-wallet', label: 'Fresh Wallet' },
-    { id: 'liquidity-impact', label: 'Liquidity Impact' },
-    { id: 'wallet-accuracy', label: 'Wallet Accuracy' },
-    { id: 'timing-pattern', label: 'Timing Pattern' },
-    { id: 'sniper-cluster', label: 'Sniper Cluster' },
-];
+import { fetchWhaleTrades, fetchStreamStatus } from '../../lib/api';
 
 function formatTime(isoString) {
     const date = new Date(isoString);
@@ -31,24 +22,32 @@ function formatTimeAgo(ms) {
     return `${hours}h ago`;
 }
 
-function formatMetadata(pattern) {
-    const { metadata, type } = pattern;
-    if (!metadata) return '-';
+function formatPrice(price) {
+    if (price === null || price === undefined) return '-';
+    return `$${parseFloat(price).toFixed(4)}`;
+}
 
-    switch (type) {
-        case 'fresh-wallet':
-            return `Age: ${metadata.walletAge?.toFixed(1) || '?'}d | Trades: ${metadata.totalTrades || '?'} | Size: $${metadata.tradeSize?.toLocaleString() || '?'}`;
-        case 'liquidity-impact':
-            return `Impact: ${metadata.liquidityPercent || '?'} | Size: $${metadata.tradeSize?.toLocaleString() || '?'}`;
-        case 'wallet-accuracy':
-            return `Win Rate: ${metadata.winRate ? (metadata.winRate * 100).toFixed(1) + '%' : '?'} | Trades: ${metadata.totalTrades || '?'}`;
-        case 'timing-pattern':
-            return `Before Resolution: ${metadata.hoursBeforeResolution || '?'}h | Trades: ${metadata.tradeCount || '?'}`;
-        case 'sniper-cluster':
-            return `Wallets: ${metadata.walletCount || '?'} | Window: ${metadata.timeWindow || '?'}s`;
-        default:
-            return JSON.stringify(metadata).slice(0, 50);
-    }
+function formatVolume(size) {
+    if (size === null || size === undefined) return '-';
+    const num = parseFloat(size);
+    if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(2)}K`;
+    return num.toFixed(2);
+}
+
+function formatNotional(notional) {
+    if (notional === null || notional === undefined) return '-';
+    const num = parseFloat(notional);
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(2)}K`;
+    return `$${num.toFixed(2)}`;
+}
+
+function formatDelta(delta) {
+    if (delta === null || delta === undefined) return '-';
+    const percent = (delta * 100).toFixed(1);
+    const sign = delta >= 0 ? '+' : '';
+    return `${sign}${percent}%`;
 }
 
 function StreamStatusBadge({ status }) {
@@ -68,21 +67,20 @@ function StreamStatusBadge({ status }) {
 }
 
 export default function DevPanel() {
-    const [patterns, setPatterns] = useState([]);
+    const [whaleTrades, setWhaleTrades] = useState([]);
     const [streamStatus, setStreamStatus] = useState(null);
-    const [filterType, setFilterType] = useState('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [lastUpdated, setLastUpdated] = useState(null);
 
     const fetchData = useCallback(async () => {
         try {
-            const [signalsData, statusData] = await Promise.all([
-                fetchRealtimeSignals({ limit: 50, type: filterType === 'all' ? null : filterType }),
+            const [tradesData, statusData] = await Promise.all([
+                fetchWhaleTrades({ limit: 50 }),
                 fetchStreamStatus(),
             ]);
 
-            setPatterns(signalsData.patterns || []);
+            setWhaleTrades(tradesData.trades || []);
             setStreamStatus(statusData);
             setLastUpdated(Date.now());
             setError(null);
@@ -92,7 +90,7 @@ export default function DevPanel() {
         } finally {
             setLoading(false);
         }
-    }, [filterType]);
+    }, []);
 
     useEffect(() => {
         fetchData();
@@ -111,7 +109,6 @@ export default function DevPanel() {
         return () => clearInterval(interval);
     }, []);
 
-    const highSeverityCount = patterns.filter(p => p.severity === 'HIGH').length;
     const timeSinceUpdate = lastUpdated ? Date.now() - lastUpdated : null;
 
     return (
@@ -125,33 +122,21 @@ export default function DevPanel() {
                         <StreamStatusBadge status={streamStatus} />
                     </div>
 
-                    <div className="dev-filters">
-                        {PATTERN_TYPES.map(type => (
-                            <button
-                                key={type.id}
-                                className={`dev-filter-btn ${filterType === type.id ? 'active' : ''}`}
-                                onClick={() => setFilterType(type.id)}
-                            >
-                                {type.label}
-                            </button>
-                        ))}
-                    </div>
-
                     <div className="dev-metrics">
                         <div className="metric-card">
-                            <div className="metric-card-label">Total Patterns</div>
-                            <div className="metric-card-value">{patterns.length}</div>
+                            <div className="metric-card-label">Whale Trades</div>
+                            <div className="metric-card-value">{whaleTrades.length}</div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-card-label">High Severity</div>
-                            <div className={`metric-card-value ${highSeverityCount > 0 ? 'high-severity' : ''}`}>
-                                {highSeverityCount}
+                            <div className="metric-card-label">Total Detected</div>
+                            <div className="metric-card-value">
+                                {streamStatus?.detectedWhaleTrades?.toLocaleString() || '0'}
                             </div>
                         </div>
                         <div className="metric-card">
-                            <div className="metric-card-label">Signals Detected</div>
+                            <div className="metric-card-label">Trades Processed</div>
                             <div className="metric-card-value">
-                                {streamStatus?.detectedSignals?.toLocaleString() || '0'}
+                                {streamStatus?.processedTrades?.toLocaleString() || '0'}
                             </div>
                         </div>
                         <div className="metric-card">
@@ -165,7 +150,7 @@ export default function DevPanel() {
                     {loading ? (
                         <div className="loading">
                             <div className="loading-spinner"></div>
-                            <span>Loading patterns...</span>
+                            <span>Loading whale trades...</span>
                         </div>
                     ) : error ? (
                         <div className="dev-empty-state">
@@ -174,46 +159,52 @@ export default function DevPanel() {
                                 Make sure the backend is running and the internal API endpoints are available.
                             </p>
                         </div>
-                    ) : patterns.length === 0 ? (
+                    ) : whaleTrades.length === 0 ? (
                         <div className="dev-empty-state">
-                            <p>No anomalous patterns detected yet.</p>
+                            <p>No whale trades detected yet.</p>
                             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
-                                Patterns will appear here when the stream processor detects suspicious trading activity.
+                                Whale trades will appear here when unusually large trades are detected.
                             </p>
                         </div>
                     ) : (
                         <div className="patterns-table">
-                            <div className="patterns-table-header">
+                            <div className="patterns-table-header whale-header">
                                 <span>Time</span>
-                                <span>Type</span>
-                                <span>Severity</span>
-                                <span>Confidence</span>
-                                <span>Direction</span>
-                                <span>Metadata</span>
+                                <span>Event</span>
+                                <span>Outcome</span>
+                                <span>Side</span>
+                                <span>Impact</span>
+                                <span>Volume</span>
+                                <span>Price</span>
+                                <span>Notional</span>
                             </div>
-                            {patterns.map(pattern => (
-                                <div key={pattern.id} className="pattern-row">
+                            {whaleTrades.map(trade => (
+                                <div key={trade.id} className="pattern-row whale-row">
                                     <span className="pattern-time">
-                                        {formatTime(pattern.detectedAt)}
+                                        {formatTime(trade.timestamp || trade.recordedAt)}
+                                    </span>
+                                    <span className="whale-event" title={trade.eventTitle || trade.assetId}>
+                                        {trade.eventTitle || trade.assetId?.slice(0, 12) + '...'}
                                     </span>
                                     <span>
-                                        <span className={`pattern-type-badge pattern-type-${pattern.type}`}>
-                                            {pattern.type.replace(/-/g, ' ')}
+                                        <span className={`outcome-badge outcome-${trade.outcome?.toLowerCase()}`}>
+                                            {trade.outcome || '-'}
                                         </span>
                                     </span>
-                                    <span>
-                                        <span className={`severity-badge severity-${pattern.severity?.toLowerCase()}`}>
-                                            {pattern.severity}
-                                        </span>
+                                    <span className={`pattern-direction ${trade.side?.toLowerCase()}`}>
+                                        {trade.side}
                                     </span>
-                                    <span className="pattern-confidence">
-                                        {(pattern.confidence * 100).toFixed(0)}%
+                                    <span className={`whale-delta ${trade.probabilityDelta >= 0 ? 'delta-positive' : 'delta-negative'}`}>
+                                        {formatDelta(trade.probabilityDelta)}
                                     </span>
-                                    <span className={`pattern-direction ${pattern.direction?.toLowerCase()}`}>
-                                        {pattern.direction}
+                                    <span className="whale-volume">
+                                        {formatVolume(trade.size)}
                                     </span>
-                                    <span className="pattern-metadata" title={JSON.stringify(pattern.metadata, null, 2)}>
-                                        {formatMetadata(pattern)}
+                                    <span className="whale-price">
+                                        {formatPrice(trade.price)}
+                                    </span>
+                                    <span className="whale-notional">
+                                        {formatNotional(trade.notional)}
                                     </span>
                                 </div>
                             ))}

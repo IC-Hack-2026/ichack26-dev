@@ -1327,6 +1327,71 @@ body {
     white-space: nowrap;
 }
 
+/* Whale Trade Table */
+.whale-header,
+.whale-row {
+    grid-template-columns: 90px 1fr 70px 60px 70px 80px 80px 90px;
+}
+
+.whale-delta {
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.delta-positive {
+    color: #10b981;
+}
+
+.delta-negative {
+    color: #ef4444;
+}
+
+.whale-event {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.whale-volume,
+.whale-price,
+.whale-notional {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+}
+
+.whale-notional {
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+
+.outcome-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+}
+
+.outcome-badge.outcome-yes {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.outcome-badge.outcome-no {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.pattern-direction.buy {
+    color: #10b981;
+}
+
+.pattern-direction.sell {
+    color: #ef4444;
+}
+
 .dev-refresh-info {
     display: flex;
     justify-content: flex-end;
@@ -1371,7 +1436,7 @@ body {
 
     .patterns-table-header,
     .pattern-row {
-        min-width: 700px;
+        min-width: 750px;
     }
 }
 

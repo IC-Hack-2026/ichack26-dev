@@ -52,14 +52,13 @@ export async function fetchMarket(slug) {
 }
 
 // Internal API endpoints for developer panel
-export async function fetchRealtimeSignals({ limit = 50, type = null } = {}) {
+export async function fetchWhaleTrades({ limit = 50 } = {}) {
     const params = new URLSearchParams({ limit });
-    if (type) params.set('type', type);
 
-    const res = await fetch(`${API_URL}/api/internal/signals/realtime?${params}`, {
+    const res = await fetch(`${API_URL}/api/internal/whale-trades?${params}`, {
         cache: 'no-store'
     });
-    if (!res.ok) throw new Error('Failed to fetch realtime signals');
+    if (!res.ok) throw new Error('Failed to fetch whale trades');
     return res.json();
 }
 
