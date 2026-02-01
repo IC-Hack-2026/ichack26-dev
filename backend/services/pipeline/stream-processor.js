@@ -365,50 +365,88 @@ class StreamProcessor extends EventEmitter {
     async _subscribeToActiveMarkets() {
         try {
             // Get active events from database
-            const activeEvents = await db.events.getAll({ limit: 50, resolved: false });
+            const activeEvents = await db.events.getAll({ limit: 100, resolved: false });
 
             // If no events in DB, fetch top markets from Polymarket API
             if (activeEvents.length === 0) {
                 const polymarket = require('../polymarket/client');
-                const markets = await polymarket.fetchMarkets({ limit: 20 });
+                const markets = await polymarket.fetchMarkets({ limit: 100 });
 
                 for (const market of markets) {
-                    // Subscribe using the market's condition ID / clob token IDs
-                    // clobTokenIds is a JSON string, need to parse it
-                    let clobTokenIds = market.rawData?.clobTokenIds;
-                    if (typeof clobTokenIds === 'string') {
-                        try {
-                            clobTokenIds = JSON.parse(clobTokenIds);
-                        } catch {
-                            clobTokenIds = null;
-                        }
-                    }
-                    if (Array.isArray(clobTokenIds)) {
-                        for (const tokenId of clobTokenIds) {
-                            this.subscribeToMarket(tokenId);
-                        }
-                    }
+                    await this._subscribeToMarketTokens(market.rawData?.clobTokenIds, market.id);
                 }
                 console.log(`StreamProcessor: Auto-subscribed to ${this.subscriptions.size} markets from API`);
                 return;
             }
 
+            // Subscribe to events from database
             for (const event of activeEvents) {
-                // Subscribe to each market's tokens
-                if (event.markets && Array.isArray(event.markets)) {
-                    for (const market of event.markets) {
-                        if (market.clobTokenIds) {
-                            for (const tokenId of market.clobTokenIds) {
-                                this.subscribeToMarket(tokenId);
-                            }
-                        }
-                    }
-                }
+                // Extract clobTokenIds from rawData (where sync stores it)
+                await this._subscribeToMarketTokens(event.rawData?.clobTokenIds, event.id);
             }
 
-            console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets`);
+            console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets from DB`);
         } catch (error) {
             console.error('StreamProcessor: Error subscribing to active markets:', error.message);
+        }
+    }
+
+    /**
+     * Helper to subscribe to market tokens and optionally generate article
+     * @param {string|Array} clobTokenIds - Token IDs (may be JSON string or array)
+     * @param {string} eventId - Event ID for article generation
+     * @private
+     */
+    async _subscribeToMarketTokens(clobTokenIds, eventId) {
+        // Parse if it's a JSON string
+        if (typeof clobTokenIds === 'string') {
+            try {
+                clobTokenIds = JSON.parse(clobTokenIds);
+            } catch {
+                return;
+            }
+        }
+
+        if (!Array.isArray(clobTokenIds)) {
+            return;
+        }
+
+        for (const tokenId of clobTokenIds) {
+            // Only subscribe if not already subscribed
+            if (!this.subscriptions.has(tokenId)) {
+                this.subscribeToMarket(tokenId);
+            }
+        }
+
+        // Generate article for this event if it doesn't exist
+        if (eventId) {
+            await this._ensureArticleExists(eventId);
+        }
+    }
+
+    /**
+     * Ensure an article exists for a given event
+     * @param {string} eventId - Event ID
+     * @private
+     */
+    async _ensureArticleExists(eventId) {
+        try {
+            const existingArticle = await db.articles.getByEventId(eventId);
+            if (existingArticle) {
+                return; // Article already exists
+            }
+
+            const event = await db.events.getById(eventId);
+            if (!event) {
+                return; // Event not found
+            }
+
+            const articleGenerator = require('../article/generator');
+            const prediction = await db.predictions.getLatestByEventId(eventId);
+            await articleGenerator.createArticle(event, prediction);
+            console.log(`StreamProcessor: Generated article for event ${eventId}`);
+        } catch (error) {
+            console.error(`StreamProcessor: Failed to generate article for event ${eventId}:`, error.message);
         }
     }
 
@@ -601,6 +639,8 @@ function startFakePatternGenerator() {
         const pattern = generateFakePattern();
         await db.detectedPatterns.record(pattern);
         streamProcessor.detectedSignals++;
+        // Simulate processing 10-50 trades that led to this pattern detection
+        streamProcessor.processedTrades += Math.floor(10 + Math.random() * 40);
         console.log(`[FakePatternGenerator] Created ${pattern.type} pattern (${pattern.severity})`);
     }, 5000);
 

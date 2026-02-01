@@ -50,7 +50,9 @@ export async function fetchRealtimeSignals({ limit = 50, type = null } = {}) {
     const params = new URLSearchParams({ limit });
     if (type) params.set('type', type);
 
-    const res = await fetch(`${API_URL}/api/internal/signals/realtime?${params}`);
+    const res = await fetch(`${API_URL}/api/internal/signals/realtime?${params}`, {
+        cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Failed to fetch realtime signals');
     return res.json();
 }
@@ -62,7 +64,9 @@ export async function fetchSuspiciousWallets({ limit = 20 } = {}) {
 }
 
 export async function fetchStreamStatus() {
-    const res = await fetch(`${API_URL}/api/internal/stream/status`);
+    const res = await fetch(`${API_URL}/api/internal/stream/status`, {
+        cache: 'no-store'
+    });
     if (!res.ok) throw new Error('Failed to fetch stream status');
     return res.json();
 }

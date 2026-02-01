@@ -24,7 +24,8 @@ router.post('/sync', async (req, res) => {
         const results = {
             events: 0,
             predictions: 0,
-            articles: 0
+            articles: 0,
+            subscriptions: 0
         };
 
         for (const market of markets) {
@@ -49,11 +50,30 @@ router.post('/sync', async (req, res) => {
             const prediction = await db.predictions.getLatestByEventId(market.id);
             await articleGenerator.createArticle(market, prediction);
             results.articles++;
+
+            // Subscribe to market's token IDs for real-time updates
+            let clobTokenIds = market.rawData?.clobTokenIds;
+            if (typeof clobTokenIds === 'string') {
+                try {
+                    clobTokenIds = JSON.parse(clobTokenIds);
+                } catch {
+                    clobTokenIds = null;
+                }
+            }
+            if (Array.isArray(clobTokenIds)) {
+                for (const tokenId of clobTokenIds) {
+                    if (!streamProcessor.subscriptions.has(tokenId)) {
+                        streamProcessor.subscribeToMarket(tokenId);
+                        results.subscriptions++;
+                    }
+                }
+            }
         }
 
         res.json({
             success: true,
-            synced: results
+            synced: results,
+            totalSubscriptions: streamProcessor.subscriptions.size
         });
     } catch (error) {
         console.error('Sync error:', error.message);

@@ -98,9 +98,9 @@ export default function DevPanel() {
         fetchData();
     }, [fetchData]);
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 3 seconds
     useEffect(() => {
-        const interval = setInterval(fetchData, 30000);
+        const interval = setInterval(fetchData, 3000);
         return () => clearInterval(interval);
     }, [fetchData]);
 
@@ -224,7 +224,7 @@ export default function DevPanel() {
                         <div className="dev-refresh-info">
                             <span>Updated {formatTimeAgo(timeSinceUpdate)}</span>
                             <span>|</span>
-                            <span>Auto-refresh every 30s</span>
+                            <span>Auto-refresh every 3s</span>
                         </div>
                     )}
                 </section>

@@ -11,7 +11,8 @@ const polymarket = require('./services/polymarket/client');
 // Real-time stream processing
 const { streamProcessor } = require('./services/pipeline/stream-processor');
 const predictionEngine = require('./services/prediction/engine');
-const { regenerateArticleForEvent } = require('./services/article/generator');
+const { regenerateArticleForEvent, createArticle } = require('./services/article/generator');
+const db = require('./db');
 
 // Debouncing for article regeneration (max once per 30 seconds per event)
 const REGENERATION_DEBOUNCE_MS = 30000;
@@ -213,4 +214,117 @@ app.listen(config.port, () => {
             console.error('Failed to start stream processor:', err);
         });
     }
+
+    // Auto-sync markets every 5 minutes
+    const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    setInterval(async () => {
+        try {
+            console.log('[AutoSync] Starting periodic market sync...');
+            const markets = await polymarket.fetchMarkets({ limit: 50 });
+
+            let newEvents = 0;
+            let newArticles = 0;
+            let newSubscriptions = 0;
+
+            for (const market of markets) {
+                // Check if event already exists
+                const existingEvent = await db.events.getById(market.id);
+
+                // Upsert event
+                await db.events.upsert({
+                    id: market.id,
+                    slug: market.slug,
+                    title: market.question,
+                    description: market.description,
+                    category: market.category,
+                    endDate: market.endDate,
+                    resolved: false,
+                    rawData: market.rawData
+                });
+
+                if (!existingEvent) {
+                    newEvents++;
+                }
+
+                // Generate article if it doesn't exist
+                const existingArticle = await db.articles.getByEventId(market.id);
+                if (!existingArticle) {
+                    const prediction = await db.predictions.getLatestByEventId(market.id);
+                    await createArticle(market, prediction || { adjustedProbability: market.probability });
+                    newArticles++;
+                }
+
+                // Subscribe to market tokens
+                let clobTokenIds = market.rawData?.clobTokenIds;
+                if (typeof clobTokenIds === 'string') {
+                    try {
+                        clobTokenIds = JSON.parse(clobTokenIds);
+                    } catch {
+                        clobTokenIds = null;
+                    }
+                }
+                if (Array.isArray(clobTokenIds)) {
+                    for (const tokenId of clobTokenIds) {
+                        if (!streamProcessor.subscriptions.has(tokenId)) {
+                            streamProcessor.subscribeToMarket(tokenId);
+                            newSubscriptions++;
+                        }
+                    }
+                }
+            }
+
+            console.log(`[AutoSync] Completed: ${newEvents} new events, ${newArticles} new articles, ${newSubscriptions} new subscriptions (total: ${streamProcessor.subscriptions.size})`);
+        } catch (error) {
+            console.error('[AutoSync] Failed:', error.message);
+        }
+    }, AUTO_SYNC_INTERVAL);
+
+    // Also run an initial sync after a short delay to populate data on startup
+    setTimeout(async () => {
+        try {
+            console.log('[InitialSync] Running initial market sync...');
+            const markets = await polymarket.fetchMarkets({ limit: 50 });
+
+            let syncedArticles = 0;
+            for (const market of markets) {
+                await db.events.upsert({
+                    id: market.id,
+                    slug: market.slug,
+                    title: market.question,
+                    description: market.description,
+                    category: market.category,
+                    endDate: market.endDate,
+                    resolved: false,
+                    rawData: market.rawData
+                });
+
+                const existingArticle = await db.articles.getByEventId(market.id);
+                if (!existingArticle) {
+                    await createArticle(market, { adjustedProbability: market.probability });
+                    syncedArticles++;
+                }
+
+                // Subscribe to tokens
+                let clobTokenIds = market.rawData?.clobTokenIds;
+                if (typeof clobTokenIds === 'string') {
+                    try {
+                        clobTokenIds = JSON.parse(clobTokenIds);
+                    } catch {
+                        clobTokenIds = null;
+                    }
+                }
+                if (Array.isArray(clobTokenIds)) {
+                    for (const tokenId of clobTokenIds) {
+                        if (!streamProcessor.subscriptions.has(tokenId)) {
+                            streamProcessor.subscribeToMarket(tokenId);
+                        }
+                    }
+                }
+            }
+
+            console.log(`[InitialSync] Completed: ${markets.length} events, ${syncedArticles} articles, ${streamProcessor.subscriptions.size} subscriptions`);
+        } catch (error) {
+            console.error('[InitialSync] Failed:', error.message);
+        }
+    }, 3000); // Wait 3 seconds for server to fully initialize
 });

@@ -1222,3 +1222,15 @@ body {
         min-width: 700px;
     }
 }
+
+/* Dev Panel Nav Link */
+.nav-link-dev {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    opacity: 0.7;
+}
+
+.nav-link-dev:hover {
+    opacity: 1;
+    border-bottom-color: var(--text-muted);
+}
