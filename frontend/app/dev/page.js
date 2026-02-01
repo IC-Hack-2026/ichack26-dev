@@ -139,12 +139,6 @@ export default function DevPanel() {
                                 {streamStatus?.processedTrades?.toLocaleString() || '0'}
                             </div>
                         </div>
-                        <div className="metric-card">
-                            <div className="metric-card-label">Subscriptions</div>
-                            <div className="metric-card-value">
-                                {streamStatus?.subscriptionCount || '0'}
-                            </div>
-                        </div>
                     </div>
 
                     {loading ? (
