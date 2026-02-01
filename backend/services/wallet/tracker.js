@@ -25,7 +25,9 @@ class WalletTracker {
         const address = (trade.maker || trade.taker || trade.address || '').toLowerCase();
 
         if (!address) {
-            throw new Error('Trade must have a wallet address (maker, taker, or address)');
+            // Some trades (like last_trade_price events) don't have wallet addresses
+            // Return null instead of throwing an error
+            return null;
         }
 
         // Get or create profile

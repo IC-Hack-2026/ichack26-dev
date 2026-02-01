@@ -157,16 +157,13 @@ class StreamProcessor extends EventEmitter {
      */
     async processTrade(tradeData) {
         try {
-            // Debug: log raw trade data
-            console.log('StreamProcessor: Raw trade data:', JSON.stringify(tradeData, null, 2));
-
             // Extract trade info
             const trade = this._normalizeTradeData(tradeData);
 
             // Record trade in database
             await db.tradeHistory.record(trade);
 
-            // Track wallet activity
+            // Track wallet activity (returns null if no wallet address)
             await walletTracker.trackTrade(trade);
 
             // Emit trade event
