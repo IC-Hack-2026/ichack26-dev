@@ -99,5 +99,12 @@ module.exports = {
     article: {
         maxLength: 800,
         summaryLength: 150
+    },
+
+    // RAG (Related News Search) settings
+    rag: {
+        enabled: process.env.BRAVE_SEARCH_API_KEY || process.env.TAVILY_API_KEY ? true : false,
+        maxResults: parseInt(process.env.RAG_MAX_RESULTS) || 5,
+        generateSummaries: process.env.RAG_GENERATE_SUMMARIES !== 'false'
     }
 };

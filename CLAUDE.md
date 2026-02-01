@@ -21,6 +21,7 @@ ichack26-dev/
 - **Services**:
   - `services/polymarket/client.js` - Polymarket API integration
   - `services/article/generator.js` - OpenAI article generation
+  - `services/rag/` - RAG news search for related articles
   - `services/signals/` - Signal detection processors
   - `services/prediction/engine.js` - Probability adjustment
   - `services/cache/index.js` - TTL-based caching
@@ -57,6 +58,12 @@ PORT=3001
 OPENAI_API_KEY=sk-...    # Optional: enables AI article generation
 DB_HOST=                 # Optional: PostgreSQL host (uses in-memory if not set)
 REDIS_URL=               # Optional: Redis URL (uses in-memory cache if not set)
+
+# RAG News Search (at least one required for related news feature)
+BRAVE_SEARCH_API_KEY=    # Optional: Brave Search API key for related news
+TAVILY_API_KEY=          # Optional: Tavily API key (alternative to Brave)
+RAG_MAX_RESULTS=5        # Optional: max related articles to fetch (default: 5)
+RAG_GENERATE_SUMMARIES=true  # Optional: generate AI summaries for related news
 ```
 
 Frontend (`frontend/.env.local`):
@@ -70,6 +77,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 - `GET /api/articles` - List articles (?category, ?limit, ?sort)
 - `GET /api/articles/featured` - Top articles for hero section
 - `GET /api/articles/:slug` - Single article
+- `GET /api/articles/:slug/related` - RAG search for related real-world news
 - `GET /api/categories` - Category list
 
 ### Internal (Admin)
@@ -107,6 +115,27 @@ Without OpenAI key: Uses `generateFallbackArticle()` for template-based articles
 With OpenAI key: Uses GPT-4o-mini to generate news-style articles
 
 Articles are generated on-demand when `/api/articles` is called and cached.
+
+## RAG Related News
+
+When a user views an article, the frontend fetches related real-world news via RAG search.
+
+**How it works:**
+1. User clicks on an article to view the full content
+2. Frontend calls `GET /api/articles/:slug/related`
+3. Backend extracts key terms from the article headline
+4. Backend searches for related news using Brave Search or Tavily API
+5. OpenAI generates contextual summaries explaining each related article's relevance
+6. Frontend displays related articles as clickable cards with headlines and summaries
+
+**Configuration:**
+- Set `BRAVE_SEARCH_API_KEY` or `TAVILY_API_KEY` to enable RAG search
+- Without API keys, the related articles section shows a configuration message
+- With `OPENAI_API_KEY`, summaries explain how each related article connects to the prediction
+
+**Files:**
+- `backend/services/rag/newsSearch.js` - Search and summarization logic
+- `frontend/components/article/RelatedArticles.js` - UI component
 
 ## Database Schema (In-Memory)
 
