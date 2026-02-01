@@ -2,6 +2,41 @@
 // Can be replaced with PostgreSQL for production
 
 const config = require('../config');
+const fs = require('fs');
+const path = require('path');
+
+// Data directory for persistent storage
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PATTERNS_FILE = path.join(DATA_DIR, 'detected-patterns.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Load persisted patterns on startup
+function loadPersistedPatterns() {
+    try {
+        if (fs.existsSync(PATTERNS_FILE)) {
+            const data = fs.readFileSync(PATTERNS_FILE, 'utf8');
+            const patterns = JSON.parse(data);
+            console.log(`[DB] Loaded ${patterns.length} persisted patterns from disk`);
+            return patterns;
+        }
+    } catch (error) {
+        console.error('[DB] Failed to load persisted patterns:', error.message);
+    }
+    return [];
+}
+
+// Save patterns to disk
+function savePatternsToDisk(patterns) {
+    try {
+        fs.writeFileSync(PATTERNS_FILE, JSON.stringify(patterns, null, 2));
+    } catch (error) {
+        console.error('[DB] Failed to save patterns to disk:', error.message);
+    }
+}
 
 // In-memory store (used when DB not configured)
 const store = {
@@ -13,7 +48,7 @@ const store = {
     // New collections for insider trading detection
     walletProfiles: new Map(),       // address -> profile object
     tradeHistory: [],                // Array of trades (capped at 100k, FIFO)
-    detectedPatterns: [],            // Array of detected insider patterns
+    detectedPatterns: loadPersistedPatterns(),  // Load from disk on startup
     orderbookSnapshots: new Map()    // tokenId -> circular buffer of snapshots
 };
 
@@ -180,6 +215,27 @@ const articles = {
         if (!category) return store.articles.size;
         return Array.from(store.articles.values())
             .filter(a => a.category === category).length;
+    },
+
+    /**
+     * Update probability for all articles linked to a given eventId
+     * @param {string} eventId - The event ID to match
+     * @param {number} probability - The new probability value
+     * @returns {number} - Number of articles updated
+     */
+    async updateProbability(eventId, probability) {
+        let updatedCount = 0;
+        for (const [id, article] of store.articles.entries()) {
+            if (article.eventId === eventId) {
+                store.articles.set(id, {
+                    ...article,
+                    probability,
+                    probabilityUpdatedAt: new Date().toISOString()
+                });
+                updatedCount++;
+            }
+        }
+        return updatedCount;
     }
 };
 
@@ -366,6 +422,10 @@ const detectedPatterns = {
             detectedAt: new Date().toISOString()
         };
         store.detectedPatterns.push(record);
+
+        // Persist to disk
+        savePatternsToDisk(store.detectedPatterns);
+
         return record;
     },
 
@@ -393,6 +453,21 @@ const detectedPatterns = {
             .filter(p => p.type === type)
             .slice(-limit)
             .reverse();
+    },
+
+    /**
+     * Clear all patterns (useful for testing)
+     */
+    async clear() {
+        store.detectedPatterns = [];
+        savePatternsToDisk(store.detectedPatterns);
+    },
+
+    /**
+     * Get total count of patterns
+     */
+    async count() {
+        return store.detectedPatterns.length;
     }
 };
 

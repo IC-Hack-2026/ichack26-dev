@@ -177,9 +177,47 @@ async function generateArticlesForEvents(events, predictions = {}) {
     return articles;
 }
 
+// Regenerate article for a specific event (used for real-time signal updates)
+async function regenerateArticleForEvent(eventId) {
+    // Fetch the event from the database
+    const event = await db.events.getById(eventId);
+    if (!event) {
+        console.warn(`[ArticleGenerator] Event not found for regeneration: ${eventId}`);
+        return null;
+    }
+
+    // Get the latest prediction for the event
+    const prediction = await db.predictions.getLatestByEventId(eventId);
+
+    // Check if an article already exists for this event
+    const existingArticle = await db.articles.getByEventId(eventId);
+
+    // Generate new article content
+    const articleData = await generateArticle(event, prediction);
+
+    if (existingArticle) {
+        // Update the existing article with new content
+        const updatedArticle = await db.articles.update(existingArticle.id, {
+            headline: articleData.headline,
+            summary: articleData.summary,
+            body: articleData.body,
+            probability: articleData.probability,
+            updatedAt: new Date().toISOString()
+        });
+        console.log(`[ArticleGenerator] Regenerated article for event ${eventId}: "${articleData.headline}"`);
+        return updatedArticle;
+    } else {
+        // Create a new article if one doesn't exist
+        const newArticle = await db.articles.create(articleData);
+        console.log(`[ArticleGenerator] Created new article for event ${eventId}: "${articleData.headline}"`);
+        return newArticle;
+    }
+}
+
 module.exports = {
     generateArticle,
     createArticle,
     generateArticlesForEvents,
-    generateFallbackArticle
+    generateFallbackArticle,
+    regenerateArticleForEvent
 };

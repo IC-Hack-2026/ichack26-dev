@@ -133,6 +133,12 @@ async function processRealTimeSignal(signal, market) {
         metadata: signal.metadata || {}
     });
 
+    // Update linked articles with the new probability
+    const articlesUpdated = await db.articles.updateProbability(eventId, newAdjusted);
+    if (articlesUpdated > 0) {
+        console.log(`[PredictionEngine] Updated probability for ${articlesUpdated} article(s) linked to event ${eventId}: ${newAdjusted.toFixed(4)}`);
+    }
+
     return {
         previousProbability: currentAdjusted,
         newProbability: newAdjusted,

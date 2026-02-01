@@ -23,8 +23,15 @@ class WalletAccuracyProcessor extends BaseProcessor {
      * @returns {Promise<Object>} Signal result
      */
     async process(event, market, trade) {
+        // Get wallet address from trade
+        const address = (trade.maker || trade.taker || trade.address || '').toLowerCase();
+
+        if (!address) {
+            return { detected: false };
+        }
+
         // Get wallet accuracy statistics
-        const accuracy = await walletTracker.getWalletAccuracy(trade.address);
+        const accuracy = await walletTracker.getWalletAccuracy(address);
         const { winRate, resolvedPositions, wins, losses } = accuracy;
 
         // Check if conditions are met for detection

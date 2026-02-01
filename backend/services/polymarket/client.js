@@ -22,29 +22,53 @@ function parseOutcomes(market) {
 }
 
 // Categorize market based on title/description
+// Priority order matters: World checked first to catch geopolitical terms before other categories
 function categorizeMarket(market) {
     const text = `${market.question || ''} ${market.description || ''}`.toLowerCase();
 
-    if (text.match(/trump|biden|election|president|congress|senate|governor|democrat|republican|vote|political|policy/)) {
+    // World category (check FIRST - most geopolitical terms that could be misclassified)
+    if (text.match(/\b(iran|iraq|syria|israel|palestine|gaza|russia|ukraine|china|taiwan|korea|afghanistan|yemen|lebanon|saudi|turkey|pakistan|india|mexico|canada|europe|eu|european)\b/) ||
+        text.match(/\b(invasion|war|military|conflict|sanctions|treaty|nato|un|united nations|geopolitical|diplomatic|ambassador|embassy)\b/) ||
+        text.match(/\b(world|global|international|foreign|border|refugee|humanitarian|ceasefire|peace|troops|army|navy|missile|nuclear|weapon)\b/)) {
+        return 'World';
+    }
+
+    // Politics (US domestic politics)
+    if (text.match(/\b(trump|biden|harris|election|president|congress|senate|governor|democrat|republican|gop|dnc|rnc)\b/) ||
+        text.match(/\b(vote|voting|ballot|poll|primary|caucus|impeach|supreme court|scotus|legislation|bill|law|amendment)\b/) ||
+        text.match(/\b(political|policy|administration|white house|cabinet|attorney general|secretary|federal)\b/)) {
         return 'Politics';
     }
-    if (text.match(/crypto|bitcoin|ethereum|btc|eth|token|blockchain|defi|nft/)) {
-        return 'Crypto';
-    }
-    if (text.match(/sport|nfl|nba|mlb|soccer|football|basketball|tennis|golf|game|team|player|championship|league/)) {
+
+    // Sports
+    if (text.match(/\b(sport|nfl|nba|mlb|nhl|mls|ufc|mma|boxing|soccer|football|basketball|baseball|hockey|tennis|golf)\b/) ||
+        text.match(/\b(game|match|team|player|championship|league|playoff|finals|tournament|cup|medal|olympic|super bowl)\b/) ||
+        text.match(/\b(coach|draft|trade|mvp|score|win|lose|season|world series|stanley cup)\b/)) {
         return 'Sports';
     }
-    if (text.match(/stock|market|fed|rate|economy|gdp|inflation|recession|dow|nasdaq|s&p|earnings|ipo/)) {
-        return 'Finance';
-    }
-    if (text.match(/ai|tech|apple|google|microsoft|amazon|meta|tesla|spacex|launch|rocket|satellite/)) {
-        return 'Technology';
-    }
-    if (text.match(/celebrity|movie|music|entertainment|award|oscar|grammy|show|concert|album/)) {
+
+    // Entertainment
+    if (text.match(/\b(celebrity|movie|film|music|entertainment|award|oscar|grammy|emmy|golden globe|tony)\b/) ||
+        text.match(/\b(show|concert|album|song|artist|actor|actress|director|netflix|disney|hollywood|streaming)\b/) ||
+        text.match(/\b(box office|premiere|release|tv|television|series|podcast|youtube|tiktok|viral)\b/)) {
         return 'Entertainment';
     }
-    if (text.match(/war|military|ukraine|russia|china|taiwan|conflict|nato|treaty|international/)) {
-        return 'World';
+
+    // Finance
+    if (text.match(/\b(stock|market|fed|federal reserve|rate|economy|gdp|inflation|recession|dow|nasdaq|s&p)\b/) ||
+        text.match(/\b(earnings|ipo|bond|treasury|debt|deficit|trade|tariff|currency|forex|commodities|gold|oil)\b/)) {
+        return 'Finance';
+    }
+
+    // Technology
+    if (text.match(/\b(ai|artificial intelligence|tech|technology|apple|google|microsoft|amazon|meta|tesla|spacex)\b/) ||
+        text.match(/\b(launch|rocket|satellite|software|hardware|chip|semiconductor|robot|autonomous|startup|silicon valley)\b/)) {
+        return 'Technology';
+    }
+
+    // Crypto (check LAST to avoid false positives from terms like "token" that might appear in other contexts)
+    if (text.match(/\b(crypto|cryptocurrency|bitcoin|ethereum|btc|eth|token|blockchain|defi|nft|web3|wallet|mining|altcoin|stablecoin|solana|cardano|dogecoin)\b/)) {
+        return 'Crypto';
     }
 
     return 'Other';

@@ -36,6 +36,7 @@ export default function Header() {
                 <Link href="/category/crypto" className="nav-link">Crypto</Link>
                 <Link href="/category/sports" className="nav-link">Sports</Link>
                 <Link href="/category/finance" className="nav-link">Finance</Link>
+                <Link href="/dev" className="nav-link nav-link-dev">Dev</Link>
             </nav>
         </header>
     );

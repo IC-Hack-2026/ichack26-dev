@@ -368,50 +368,88 @@ class StreamProcessor extends EventEmitter {
     async _subscribeToActiveMarkets() {
         try {
             // Get active events from database
-            const activeEvents = await db.events.getAll({ limit: 50, resolved: false });
+            const activeEvents = await db.events.getAll({ limit: 100, resolved: false });
 
             // If no events in DB, fetch top markets from Polymarket API
             if (activeEvents.length === 0) {
                 const polymarket = require('../polymarket/client');
-                const markets = await polymarket.fetchMarkets({ limit: 20 });
+                const markets = await polymarket.fetchMarkets({ limit: 100 });
 
                 for (const market of markets) {
-                    // Subscribe using the market's condition ID / clob token IDs
-                    // clobTokenIds is a JSON string, need to parse it
-                    let clobTokenIds = market.rawData?.clobTokenIds;
-                    if (typeof clobTokenIds === 'string') {
-                        try {
-                            clobTokenIds = JSON.parse(clobTokenIds);
-                        } catch {
-                            clobTokenIds = null;
-                        }
-                    }
-                    if (Array.isArray(clobTokenIds)) {
-                        for (const tokenId of clobTokenIds) {
-                            this.subscribeToMarket(tokenId);
-                        }
-                    }
+                    await this._subscribeToMarketTokens(market.rawData?.clobTokenIds, market.id);
                 }
                 console.log(`StreamProcessor: Auto-subscribed to ${this.subscriptions.size} markets from API`);
                 return;
             }
 
+            // Subscribe to events from database
             for (const event of activeEvents) {
-                // Subscribe to each market's tokens
-                if (event.markets && Array.isArray(event.markets)) {
-                    for (const market of event.markets) {
-                        if (market.clobTokenIds) {
-                            for (const tokenId of market.clobTokenIds) {
-                                this.subscribeToMarket(tokenId);
-                            }
-                        }
-                    }
-                }
+                // Extract clobTokenIds from rawData (where sync stores it)
+                await this._subscribeToMarketTokens(event.rawData?.clobTokenIds, event.id);
             }
 
-            console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets`);
+            console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets from DB`);
         } catch (error) {
             console.error('StreamProcessor: Error subscribing to active markets:', error.message);
+        }
+    }
+
+    /**
+     * Helper to subscribe to market tokens and optionally generate article
+     * @param {string|Array} clobTokenIds - Token IDs (may be JSON string or array)
+     * @param {string} eventId - Event ID for article generation
+     * @private
+     */
+    async _subscribeToMarketTokens(clobTokenIds, eventId) {
+        // Parse if it's a JSON string
+        if (typeof clobTokenIds === 'string') {
+            try {
+                clobTokenIds = JSON.parse(clobTokenIds);
+            } catch {
+                return;
+            }
+        }
+
+        if (!Array.isArray(clobTokenIds)) {
+            return;
+        }
+
+        for (const tokenId of clobTokenIds) {
+            // Only subscribe if not already subscribed
+            if (!this.subscriptions.has(tokenId)) {
+                this.subscribeToMarket(tokenId);
+            }
+        }
+
+        // Generate article for this event if it doesn't exist
+        if (eventId) {
+            await this._ensureArticleExists(eventId);
+        }
+    }
+
+    /**
+     * Ensure an article exists for a given event
+     * @param {string} eventId - Event ID
+     * @private
+     */
+    async _ensureArticleExists(eventId) {
+        try {
+            const existingArticle = await db.articles.getByEventId(eventId);
+            if (existingArticle) {
+                return; // Article already exists
+            }
+
+            const event = await db.events.getById(eventId);
+            if (!event) {
+                return; // Event not found
+            }
+
+            const articleGenerator = require('../article/generator');
+            const prediction = await db.predictions.getLatestByEventId(eventId);
+            await articleGenerator.createArticle(event, prediction);
+            console.log(`StreamProcessor: Generated article for event ${eventId}`);
+        } catch (error) {
+            console.error(`StreamProcessor: Failed to generate article for event ${eventId}:`, error.message);
         }
     }
 
@@ -518,8 +556,112 @@ class StreamProcessor extends EventEmitter {
 // Create singleton instance
 const streamProcessor = new StreamProcessor();
 
+/**
+ * Generate fake anomalous patterns for testing the dev panel.
+ * These patterns are designed to be clearly suspicious.
+ */
+function startFakePatternGenerator() {
+    const PATTERN_TYPES = ['liquidity-impact', 'wallet-accuracy', 'timing-pattern', 'sniper-cluster'];
+    const SEVERITIES = ['HIGH', 'MEDIUM', 'LOW'];
+    const DIRECTIONS = ['YES', 'NO'];
+
+    function randomChoice(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function randomWallet() {
+        return '0x' + Array.from({ length: 40 }, () =>
+            Math.floor(Math.random() * 16).toString(16)
+        ).join('');
+    }
+
+    function generateFakePattern() {
+        const type = randomChoice(PATTERN_TYPES);
+        const severity = randomChoice(SEVERITIES);
+        const direction = randomChoice(DIRECTIONS);
+        const confidence = 0.7 + Math.random() * 0.25; // 70-95% confidence (suspicious)
+
+        let metadata = {};
+
+        switch (type) {
+            case 'liquidity-impact':
+                // Large trade consuming significant orderbook depth
+                metadata = {
+                    liquidityPercent: (15 + Math.random() * 35).toFixed(2) + '%', // 15-50% of liquidity
+                    tradeSize: Math.floor(10000 + Math.random() * 90000), // $10k-$100k
+                    priceImpact: (2 + Math.random() * 8).toFixed(2) + '%',
+                    address: randomWallet()
+                };
+                break;
+
+            case 'wallet-accuracy':
+                // Wallet with improbably high win rate
+                metadata = {
+                    winRate: 0.85 + Math.random() * 0.14, // 85-99% win rate
+                    totalTrades: Math.floor(15 + Math.random() * 50), // 15-65 trades
+                    profitUsd: Math.floor(5000 + Math.random() * 95000),
+                    avgTradeSize: Math.floor(1000 + Math.random() * 9000),
+                    address: randomWallet()
+                };
+                break;
+
+            case 'timing-pattern':
+                // Unusual trade concentration before resolution
+                metadata = {
+                    hoursBeforeResolution: (0.5 + Math.random() * 4).toFixed(1), // 0.5-4.5 hours
+                    tradeCount: Math.floor(5 + Math.random() * 20),
+                    volumeSpike: (3 + Math.random() * 7).toFixed(1) + 'x', // 3-10x normal
+                    address: randomWallet()
+                };
+                break;
+
+            case 'sniper-cluster':
+                // Coordinated trading from multiple wallets
+                metadata = {
+                    walletCount: Math.floor(3 + Math.random() * 8), // 3-10 wallets
+                    timeWindow: Math.floor(30 + Math.random() * 90), // 30-120 seconds
+                    totalVolume: Math.floor(25000 + Math.random() * 75000),
+                    similarityScore: (0.85 + Math.random() * 0.14).toFixed(2)
+                };
+                break;
+        }
+
+        return {
+            type,
+            eventId: 'test-event-' + Math.floor(Math.random() * 1000),
+            tokenId: 'test-token-' + Math.floor(Math.random() * 1000),
+            confidence,
+            direction,
+            severity,
+            metadata
+        };
+    }
+
+    // Generate a fake pattern every 5 seconds
+    const interval = setInterval(async () => {
+        const pattern = generateFakePattern();
+        await db.detectedPatterns.record(pattern);
+        streamProcessor.detectedSignals++;
+        // Simulate processing 10-50 trades that led to this pattern detection
+        streamProcessor.processedTrades += Math.floor(10 + Math.random() * 40);
+        console.log(`[FakePatternGenerator] Created ${pattern.type} pattern (${pattern.severity})`);
+    }, 5000);
+
+    // Mark the processor as running for the status endpoint
+    streamProcessor.running = true;
+    streamProcessor.startTime = Date.now();
+
+    console.log('FakePatternGenerator: Started - generating anomalous patterns every 5 seconds');
+
+    return interval;
+}
+
+// Disabled: Fake pattern generator prevents real WebSocket from starting
+// const fakeGeneratorInterval = startFakePatternGenerator();
+
 // Export both class and singleton instance
 module.exports = {
     StreamProcessor,
-    streamProcessor
+    streamProcessor,
+    startFakePatternGenerator
 };
