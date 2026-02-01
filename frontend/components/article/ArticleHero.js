@@ -12,7 +12,7 @@ export default function ArticleHero({ article }) {
         <Link href={`/article/${article.slug}`} className="article-hero">
             <div className="article-hero-content">
                 <div className="article-hero-meta">
-                    {article.probability >= 0.8 && (
+                    {(article.adjustedProbability ?? article.probability) >= 0.8 && (
                         <span className="hero-breaking">BREAKING</span>
                     )}
                     <CategoryPill category={article.category} clickable={false} />
@@ -26,7 +26,7 @@ export default function ArticleHero({ article }) {
                 )}
 
                 <div className="article-hero-footer">
-                    <ProbabilityBadge probability={article.probability} size="large" />
+                    <ProbabilityBadge probability={article.adjustedProbability ?? article.probability} size="large" />
                 </div>
             </div>
 

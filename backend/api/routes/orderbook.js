@@ -16,29 +16,33 @@ router.get('/', (req, res) => {
     try {
         const status = orderBookManager.getStatus();
 
-        const orderBooks = status.orderBooks.map(ob => {
-            const assetMeta = assetRegistry.get(ob.assetId);
-            return {
-                assetId: ob.assetId,
-                eventTitle: assetMeta?.eventTitle || null,
-                outcome: assetMeta?.outcome || null,
-                eventId: assetMeta?.eventId || null,
-                initialized: ob.initialized,
-                bidLevels: ob.bidLevels,
-                askLevels: ob.askLevels,
-                bestBid: ob.midPrice - ob.spread / 2 || null,
-                bestAsk: ob.midPrice + ob.spread / 2 || null,
-                spread: ob.spread,
-                spreadPercent: ob.spreadPercent,
-                midPrice: ob.midPrice,
-                imbalance: ob.imbalance,
-                timestamp: ob.timestamp
-            };
-        });
+        // Filter to only include initialized order books to prevent 503 errors when clicking
+        const orderBooks = status.orderBooks
+            .filter(ob => ob.initialized)
+            .map(ob => {
+                const assetMeta = assetRegistry.get(ob.assetId);
+                return {
+                    assetId: ob.assetId,
+                    eventTitle: assetMeta?.eventTitle || null,
+                    outcome: assetMeta?.outcome || null,
+                    eventId: assetMeta?.eventId || null,
+                    initialized: ob.initialized,
+                    bidLevels: ob.bidLevels,
+                    askLevels: ob.askLevels,
+                    bestBid: ob.midPrice - ob.spread / 2 || null,
+                    bestAsk: ob.midPrice + ob.spread / 2 || null,
+                    spread: ob.spread,
+                    spreadPercent: ob.spreadPercent,
+                    midPrice: ob.midPrice,
+                    imbalance: ob.imbalance,
+                    timestamp: ob.timestamp
+                };
+            });
 
         res.json({
-            count: status.totalOrderBooks,
+            count: orderBooks.length,
             initializedCount: status.initializedCount,
+            totalOrderBooks: status.totalOrderBooks,
             totalBidLevels: status.totalBidLevels,
             totalAskLevels: status.totalAskLevels,
             orderBooks

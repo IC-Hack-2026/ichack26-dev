@@ -214,12 +214,27 @@ const articles = {
         limit = 20,
         offset = 0,
         category = null,
-        sort = 'publishedAt'
+        sort = 'publishedAt',
+        minDaysUntilExpiry = null,
+        maxDaysUntilExpiry = null
     } = {}) {
         let results = Array.from(store.articles.values());
 
         if (category) {
             results = results.filter(a => a.category === category);
+        }
+
+        // Filter by expiry date range
+        if (minDaysUntilExpiry != null || maxDaysUntilExpiry != null) {
+            const now = Date.now();
+            const minMs = (minDaysUntilExpiry || 0) * 24 * 60 * 60 * 1000;
+            const maxMs = (maxDaysUntilExpiry || Infinity) * 24 * 60 * 60 * 1000;
+
+            results = results.filter(a => {
+                if (!a.expiresAt) return false;
+                const msUntilExpiry = new Date(a.expiresAt).getTime() - now;
+                return msUntilExpiry >= minMs && msUntilExpiry <= maxMs;
+            });
         }
 
         // Sort
@@ -232,8 +247,23 @@ const articles = {
         return results.slice(offset, offset + limit);
     },
 
-    async getFeatured(limit = 5) {
-        return Array.from(store.articles.values())
+    async getFeatured(limit = 5, minDaysUntilExpiry = null, maxDaysUntilExpiry = null) {
+        let results = Array.from(store.articles.values());
+
+        // Filter by expiry date range
+        if (minDaysUntilExpiry != null || maxDaysUntilExpiry != null) {
+            const now = Date.now();
+            const minMs = (minDaysUntilExpiry || 0) * 24 * 60 * 60 * 1000;
+            const maxMs = (maxDaysUntilExpiry || Infinity) * 24 * 60 * 60 * 1000;
+
+            results = results.filter(a => {
+                if (!a.expiresAt) return false;
+                const msUntilExpiry = new Date(a.expiresAt).getTime() - now;
+                return msUntilExpiry >= minMs && msUntilExpiry <= maxMs;
+            });
+        }
+
+        return results
             .sort((a, b) => (b.probability || 0) - (a.probability || 0))
             .slice(0, limit);
     },

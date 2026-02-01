@@ -17,10 +17,18 @@ const { assetRegistry } = require('../../services/orderbook/asset-registry');
 // POST /api/internal/sync - Trigger sync with Polymarket
 router.post('/sync', async (req, res) => {
     try {
-        const { limit = 30 } = req.body;
+        const {
+            limit = 50,
+            minDaysUntilResolution = 1,
+            maxDaysUntilResolution = 14
+        } = req.body;
 
-        // Fetch latest markets
-        const markets = await polymarket.fetchMarkets({ limit });
+        // Fetch latest markets with date range filtering
+        const markets = await polymarket.fetchMarkets({
+            limit,
+            minDaysUntilResolution,
+            maxDaysUntilResolution
+        });
 
         // Store events and generate predictions
         const results = {

@@ -100,11 +100,30 @@ function transformMarket(market) {
 }
 
 // Fetch markets from Polymarket
-async function fetchMarkets({ limit = 50, sortBy = 'volume' } = {}) {
-    const cacheKey = `markets:${limit}:${sortBy}`;
+async function fetchMarkets({
+    limit = 50,
+    sortBy = 'volume',
+    minDaysUntilResolution = null,
+    maxDaysUntilResolution = null
+} = {}) {
+    const cacheKey = `markets:${limit}:${sortBy}:${minDaysUntilResolution}:${maxDaysUntilResolution}`;
 
     return cache.getOrSet(cacheKey, async () => {
-        const apiUrl = `${POLYMARKET_API}/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false`;
+        // Build API URL with optional date filtering
+        let apiUrl = `${POLYMARKET_API}/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false`;
+
+        // Add server-side date filtering if specified
+        if (minDaysUntilResolution != null || maxDaysUntilResolution != null) {
+            const now = Date.now();
+            if (minDaysUntilResolution != null) {
+                const minDate = new Date(now + minDaysUntilResolution * 24 * 60 * 60 * 1000);
+                apiUrl += `&end_date_min=${minDate.toISOString()}`;
+            }
+            if (maxDaysUntilResolution != null) {
+                const maxDate = new Date(now + maxDaysUntilResolution * 24 * 60 * 60 * 1000);
+                apiUrl += `&end_date_max=${maxDate.toISOString()}`;
+            }
+        }
 
         const response = await fetch(apiUrl);
         if (!response.ok) {

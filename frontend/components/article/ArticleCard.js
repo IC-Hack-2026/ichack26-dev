@@ -31,7 +31,7 @@ export default function ArticleCard({ article, index = 0 }) {
                 )}
 
                 <div className="article-card-footer">
-                    <ProbabilityBadge probability={article.probability} size="small" />
+                    <ProbabilityBadge probability={article.adjustedProbability ?? article.probability} size="small" />
                 </div>
             </div>
         </Link>
