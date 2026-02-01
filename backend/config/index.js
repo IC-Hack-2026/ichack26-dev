@@ -90,9 +90,9 @@ module.exports = {
 
     // Cache settings
     cache: {
-        articleTTL: 15 * 60 * 1000, // 15 minutes
-        marketTTL: 5 * 60 * 1000,   // 5 minutes
-        eventTTL: 10 * 60 * 1000    // 10 minutes
+        articleTTL: 5 * 60 * 1000,  // 5 minutes
+        marketTTL: 1 * 60 * 1000,   // 1 minute
+        eventTTL: 5 * 60 * 1000     // 5 minutes
     },
 
     // Article generation settings

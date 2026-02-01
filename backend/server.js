@@ -186,12 +186,17 @@ app.listen(config.port, () => {
         });
     }
 
-    // Auto-sync markets every 5 minutes
-    const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    // Auto-sync markets every 1 minute
+    const AUTO_SYNC_INTERVAL = 1 * 60 * 1000; // 1 minute
     setInterval(async () => {
         try {
             console.log('[AutoSync] Starting periodic market sync...');
-            const markets = await polymarket.fetchMarkets({ limit: 50 });
+            const markets = await polymarket.fetchMarkets({
+                limit: 500,
+                sortBy: 'endingSoon',
+                minDaysUntilResolution: 1,
+                maxDaysUntilResolution: 14
+            });
 
             let newEvents = 0;
             let newArticles = 0;
@@ -254,7 +259,12 @@ app.listen(config.port, () => {
     setTimeout(async () => {
         try {
             console.log('[InitialSync] Running initial market sync...');
-            const markets = await polymarket.fetchMarkets({ limit: 50 });
+            const markets = await polymarket.fetchMarkets({
+                limit: 500,
+                sortBy: 'endingSoon',
+                minDaysUntilResolution: 1,
+                maxDaysUntilResolution: 14
+            });
 
             let syncedArticles = 0;
             for (const market of markets) {

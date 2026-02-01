@@ -19,6 +19,7 @@ router.post('/sync', async (req, res) => {
     try {
         const {
             limit = 50,
+            sortBy = 'endingSoon',
             minDaysUntilResolution = 1,
             maxDaysUntilResolution = 14
         } = req.body;
@@ -26,6 +27,7 @@ router.post('/sync', async (req, res) => {
         // Fetch latest markets with date range filtering
         const markets = await polymarket.fetchMarkets({
             limit,
+            sortBy,
             minDaysUntilResolution,
             maxDaysUntilResolution
         });

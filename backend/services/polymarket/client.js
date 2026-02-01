@@ -109,8 +109,17 @@ async function fetchMarkets({
     const cacheKey = `markets:${limit}:${sortBy}:${minDaysUntilResolution}:${maxDaysUntilResolution}`;
 
     return cache.getOrSet(cacheKey, async () => {
+        // Determine sort order based on sortBy parameter
+        let orderParam = 'volume24hr';
+        let ascendingParam = 'false';
+
+        if (sortBy === 'endingSoon') {
+            orderParam = 'endDate';
+            ascendingParam = 'true';
+        }
+
         // Build API URL with optional date filtering
-        let apiUrl = `${POLYMARKET_API}/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false`;
+        let apiUrl = `${POLYMARKET_API}/markets?active=true&closed=false&limit=${limit}&order=${orderParam}&ascending=${ascendingParam}`;
 
         // Add server-side date filtering if specified
         if (minDaysUntilResolution != null || maxDaysUntilResolution != null) {
@@ -138,6 +147,13 @@ async function fetchMarkets({
             markets = markets
                 .filter(m => m.probability !== null)
                 .sort((a, b) => b.probability - a.probability);
+        } else if (sortBy === 'endingSoon') {
+            // Sort by end date ascending (soonest first)
+            markets.sort((a, b) => {
+                if (!a.endDate) return 1;
+                if (!b.endDate) return -1;
+                return new Date(a.endDate) - new Date(b.endDate);
+            });
         } else {
             markets.sort((a, b) => b.volume24hr - a.volume24hr);
         }

@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
         if (articles.length === 0) {
             const markets = await polymarket.fetchMarkets({
                 limit: parseInt(limit),
+                sortBy: 'endingSoon',
                 minDaysUntilResolution: 1,
                 maxDaysUntilResolution: 14
             });
@@ -80,7 +81,7 @@ router.get('/featured', async (req, res) => {
         if (articles.length === 0) {
             const markets = await polymarket.fetchMarkets({
                 limit,
-                sortBy: 'volume',
+                sortBy: 'endingSoon',
                 minDaysUntilResolution: 1,
                 maxDaysUntilResolution: 14
             });
