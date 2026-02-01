@@ -3,9 +3,19 @@
 import Link from 'next/link';
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
-import TimeAgo from '../common/TimeAgo';
+
+function formatResolutionDate(dateString) {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+}
 
 export default function ArticleCard({ article, index = 0 }) {
+    const resolutionDate = formatResolutionDate(article.expiresAt);
+
     return (
         <Link
             href={`/article/${article.slug}`}
@@ -19,10 +29,9 @@ export default function ArticleCard({ article, index = 0 }) {
             )}
 
             <div className="article-card-content">
-                <div className="article-card-meta">
-                    <CategoryPill category={article.category} clickable={false} />
-                    <TimeAgo date={article.publishedAt} />
-                </div>
+                {resolutionDate && (
+                    <span className="article-card-dateline">{resolutionDate}</span>
+                )}
 
                 <h3 className="article-card-headline">{article.headline}</h3>
 
@@ -31,6 +40,7 @@ export default function ArticleCard({ article, index = 0 }) {
                 )}
 
                 <div className="article-card-footer">
+                    <CategoryPill category={article.category} clickable={false} />
                     <ProbabilityBadge probability={article.adjustedProbability ?? article.probability} size="small" />
                 </div>
             </div>

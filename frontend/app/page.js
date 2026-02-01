@@ -55,7 +55,6 @@ export default function Home() {
                     <div className="content-header">
                         <div>
                             <h1 className="content-title">Tomorrow's News Today</h1>
-                            <p className="content-subtitle">AI-generated articles about future events with probability predictions</p>
                         </div>
                         <div className="controls-group">
                             <div className="sort-controls">

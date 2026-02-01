@@ -3,10 +3,20 @@
 import Link from 'next/link';
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
-import TimeAgo from '../common/TimeAgo';
+
+function formatResolutionDate(dateString) {
+    if (!dateString) return null;
+    return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+}
 
 export default function ArticleHero({ article }) {
     if (!article) return null;
+
+    const resolutionDate = formatResolutionDate(article.expiresAt);
 
     return (
         <Link href={`/article/${article.slug}`} className="article-hero">
@@ -16,8 +26,11 @@ export default function ArticleHero({ article }) {
                         <span className="hero-breaking">BREAKING</span>
                     )}
                     <CategoryPill category={article.category} clickable={false} />
-                    <TimeAgo date={article.publishedAt} />
                 </div>
+
+                {resolutionDate && (
+                    <span className="article-hero-dateline">{resolutionDate}</span>
+                )}
 
                 <h2 className="article-hero-headline">{article.headline}</h2>
 

@@ -124,7 +124,7 @@ SUGGESTED CATEGORY: ${event.category || 'General'}
 Write as if this is happening RIGHT NOW. Use present tense throughout.
 
 Return a valid JSON object (no markdown, no code blocks) with these fields:
-- headline: A compelling news headline in present tense (max 80 characters, no probability mention)
+- headline: A compelling news headline in present tense (max 80 characters, no probability mention, no dates)
 - summary: A 1-2 sentence summary for preview cards (max 150 characters)
 - body: The full article (2-3 paragraphs, ~200-300 words). Use \\n for paragraph breaks, not actual newlines.
 - category: One of: Politics, World, Finance, Technology, Sports, Entertainment, Crypto, Other
