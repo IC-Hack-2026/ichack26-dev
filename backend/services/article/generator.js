@@ -17,10 +17,7 @@ async function generateArticle(event, prediction) {
 
     try {
         const { default: OpenAI } = await import('openai');
-        const openai = new OpenAI({
-            apiKey: config.openai.apiKey,
-            baseURL: config.openai.baseURL
-        });
+        const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
         const prompt = buildPrompt(event, probabilityPercent);
 
