@@ -33,7 +33,7 @@ export async function fetchArticle(slug) {
 }
 
 export async function fetchCategories() {
-    const res = await fetch(`${API_URL}/api/categories`);
+    const res = await fetch(`${API_URL}/api/articles/meta/categories`);
     if (!res.ok) throw new Error('Failed to fetch categories');
     return res.json();
 }

@@ -43,6 +43,7 @@
 
 html {
     font-size: 16px;
+    overflow-y: scroll;  /* Always show scrollbar to prevent width jumps */
 }
 
 body {
@@ -241,6 +242,8 @@ body {
     flex-direction: column;
     gap: 0.75rem;
     align-items: flex-end;
+    min-width: 280px;        /* Prevent width collapse */
+    flex-shrink: 0;          /* Don't shrink when space is tight */
 }
 
 .sort-controls {
@@ -392,7 +395,7 @@ body {
     letter-spacing: 0.02em;
 }
 
-.hero-breaking {
+.hero-featured {
     display: inline-block;
     padding: 0.25rem 0.75rem;
     background: var(--accent-secondary);
@@ -428,7 +431,7 @@ body {
 /* Articles Grid */
 .articles-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
 }
 
@@ -442,6 +445,7 @@ body {
     overflow: hidden;
     text-decoration: none;
     transition: border-color 200ms, box-shadow 200ms;
+    max-width: 400px;
 }
 
 .article-card:hover {
@@ -856,7 +860,7 @@ body {
     }
 
     .articles-grid {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
@@ -1445,6 +1449,7 @@ body {
     color: var(--text-muted);
     font-size: 0.8125rem;
     opacity: 0.7;
+    margin-left: auto;
 }
 
 .nav-link-dev:hover {

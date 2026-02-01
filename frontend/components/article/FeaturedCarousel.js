@@ -4,15 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
-
-function formatResolutionDate(dateString) {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
+import { formatRelativeDate } from '../../lib/dateUtils';
 
 export default function FeaturedCarousel({ articles, autoPlayInterval = 5000 }) {
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -46,7 +38,7 @@ export default function FeaturedCarousel({ articles, autoPlayInterval = 5000 }) 
                 style={{ transform: `translateX(-${currentIndex * 100}%)` }}
             >
                 {articles.map((article) => {
-                    const resolutionDate = formatResolutionDate(article.expiresAt);
+                    const resolutionDate = formatRelativeDate(article.expiresAt);
                     const probability = article.adjustedProbability ?? article.probability;
 
                     return (
@@ -58,7 +50,7 @@ export default function FeaturedCarousel({ articles, autoPlayInterval = 5000 }) 
                             <div className="carousel-slide-content">
                                 <div className="carousel-slide-meta">
                                     {probability >= 0.8 && (
-                                        <span className="hero-breaking">BREAKING</span>
+                                        <span className="hero-featured">FEATURED</span>
                                     )}
                                     <CategoryPill category={article.category} clickable={false} />
                                 </div>

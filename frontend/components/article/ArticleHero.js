@@ -3,27 +3,19 @@
 import Link from 'next/link';
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
-
-function formatResolutionDate(dateString) {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
+import { formatRelativeDate } from '../../lib/dateUtils';
 
 export default function ArticleHero({ article }) {
     if (!article) return null;
 
-    const resolutionDate = formatResolutionDate(article.expiresAt);
+    const resolutionDate = formatRelativeDate(article.expiresAt);
 
     return (
         <Link href={`/article/${article.slug}`} className="article-hero">
             <div className="article-hero-content">
                 <div className="article-hero-meta">
                     {(article.adjustedProbability ?? article.probability) >= 0.8 && (
-                        <span className="hero-breaking">BREAKING</span>
+                        <span className="hero-featured">FEATURED</span>
                     )}
                     <CategoryPill category={article.category} clickable={false} />
                 </div>

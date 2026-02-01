@@ -3,6 +3,7 @@
 
 const config = require('../../config');
 const db = require('../../db');
+const { findRelatedNews } = require('../rag');
 
 // Track in-flight article generation with promise-based locking
 const inFlightArticles = new Map();  // eventId -> Promise<article>
@@ -45,6 +46,22 @@ async function generateArticle(event, prediction) {
         return null;
     }
 
+    // Fetch related news for context enrichment
+    let relatedNews = [];
+    try {
+        const eventTitle = event.title || event.question;
+        const ragResult = await findRelatedNews(eventTitle, {
+            limit: 5,
+            generateSummaries: false  // Use raw descriptions to save API calls
+        });
+        relatedNews = ragResult.relatedArticles || [];
+        if (relatedNews.length > 0) {
+            console.log(`[ArticleGenerator] Found ${relatedNews.length} related news articles for context`);
+        }
+    } catch (err) {
+        console.warn('[ArticleGenerator] RAG search failed, continuing without context:', err.message);
+    }
+
     // Check if Anthropic is configured
     if (!config.anthropic.apiKey) {
         // Fallback: generate a simple article without AI
@@ -55,11 +72,11 @@ async function generateArticle(event, prediction) {
         const Anthropic = (await import('@anthropic-ai/sdk')).default;
         const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-        const prompt = buildPrompt(event, probabilityPercent);
+        const prompt = buildPrompt(event, probabilityPercent, relatedNews);
 
         const response = await anthropic.messages.create({
             model: config.anthropic.model,
-            system: `You are a professional news writer. Write ALL content in PRESENT TENSE as if events are happening NOW. Use active voice. Example: "Stock prices surge" not "Stock prices surged" or "will surge". Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never mention prediction markets or probabilities.`,
+            system: `You are a professional news writer. Write ALL content in PRESENT TENSE as if events are happening NOW. Use active voice. Example: "Stock prices surge" not "Stock prices surged" or "will surge". Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never mention prediction markets or probabilities. If related news context is provided, incorporate relevant background information, facts, and real-world connections to make the story more informative and grounded in reality. Do not directly quote or cite the sources.`,
             messages: [
                 {
                     role: 'user',
@@ -96,7 +113,7 @@ async function generateArticle(event, prediction) {
     }
 }
 
-function buildPrompt(event, probabilityPercent) {
+function buildPrompt(event, probabilityPercent, relatedNews = []) {
     const eventTitle = event.title || event.question;
     const eventDescription = event.description || '';
 
@@ -115,10 +132,22 @@ OUTCOME DATA (use this for the headline):
 IMPORTANT: Write the headline as if ${favorite.name} wins/succeeds. Be decisive about the winner.`;
     }
 
+    // Build related news context section (descriptions only, no titles to avoid influencing headlines)
+    let relatedNewsContext = '';
+    if (relatedNews.length > 0) {
+        relatedNewsContext = '\n\nRELATED REAL-WORLD NEWS (use for background context and facts):';
+        relatedNews.slice(0, 5).forEach((article, i) => {
+            if (article.description) {
+                const trimmedDesc = article.description.slice(0, 300);
+                relatedNewsContext += `\n${i + 1}. ${trimmedDesc}${article.description.length > 300 ? '...' : ''} (${article.source})`;
+            }
+        });
+    }
+
     return `Write a news article about this event:
 
 EVENT: ${eventTitle}
-CONTEXT: ${eventDescription}${outcomesContext}
+CONTEXT: ${eventDescription}${outcomesContext}${relatedNewsContext}
 SUGGESTED CATEGORY: ${event.category || 'General'}
 
 Write as if this is happening RIGHT NOW. Use present tense throughout.

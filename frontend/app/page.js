@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '../components/layout/Header';
 import FeaturedCarousel from '../components/article/FeaturedCarousel';
 import CategorySection from '../components/article/CategorySection';
@@ -22,13 +23,25 @@ const timeHorizonConfig = {
     month: { minDays: 0, maxDays: 30 }
 };
 
-export default function Home() {
+function HomeContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+
     const [featuredArticles, setFeaturedArticles] = useState([]);
     const [categoryGroups, setCategoryGroups] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [sortBy, setSortBy] = useState('publishedAt');
-    const [probabilityFilter, setProbabilityFilter] = useState('0.6');
-    const [timeHorizon, setTimeHorizon] = useState('month');
+
+    // Read filter state from URL params
+    const sortBy = searchParams.get('sort') || 'publishedAt';
+    const probabilityFilter = searchParams.get('prob') || '0.6';
+    const timeHorizon = searchParams.get('time') || 'month';
+
+    // Update URL when filters change
+    const updateFilter = (key, value) => {
+        const params = new URLSearchParams(searchParams);
+        params.set(key, value);
+        router.replace(`?${params.toString()}`, { scroll: false });
+    };
 
     useEffect(() => {
         fetchArticles();
@@ -88,13 +101,13 @@ export default function Home() {
                             <div className="sort-controls">
                                 <button
                                     className={`sort-btn ${sortBy === 'publishedAt' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('publishedAt')}
+                                    onClick={() => updateFilter('sort', 'publishedAt')}
                                 >
                                     Latest
                                 </button>
                                 <button
                                     className={`sort-btn ${sortBy === 'probability' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('probability')}
+                                    onClick={() => updateFilter('sort', 'probability')}
                                 >
                                     Most Likely
                                 </button>
@@ -103,19 +116,19 @@ export default function Home() {
                                 <span className="filter-label">Show:</span>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.6' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.6')}
+                                    onClick={() => updateFilter('prob', '0.6')}
                                 >
                                     60%+
                                 </button>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.7' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.7')}
+                                    onClick={() => updateFilter('prob', '0.7')}
                                 >
                                     70%+
                                 </button>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.9' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.9')}
+                                    onClick={() => updateFilter('prob', '0.9')}
                                 >
                                     90%+
                                 </button>
@@ -124,19 +137,19 @@ export default function Home() {
                                 <span className="filter-label">Resolution:</span>
                                 <button
                                     className={`filter-btn ${timeHorizon === 'tomorrow' ? 'active' : ''}`}
-                                    onClick={() => setTimeHorizon('tomorrow')}
+                                    onClick={() => updateFilter('time', 'tomorrow')}
                                 >
                                     Tomorrow
                                 </button>
                                 <button
                                     className={`filter-btn ${timeHorizon === 'week' ? 'active' : ''}`}
-                                    onClick={() => setTimeHorizon('week')}
+                                    onClick={() => updateFilter('time', 'week')}
                                 >
                                     This Week
                                 </button>
                                 <button
                                     className={`filter-btn ${timeHorizon === 'month' ? 'active' : ''}`}
-                                    onClick={() => setTimeHorizon('month')}
+                                    onClick={() => updateFilter('time', 'month')}
                                 >
                                     This Month
                                 </button>
@@ -173,5 +186,25 @@ export default function Home() {
                 </section>
             </main>
         </div>
+    );
+}
+
+export default function Home() {
+    return (
+        <Suspense fallback={
+            <div className="page">
+                <Header />
+                <main className="main">
+                    <section className="content">
+                        <div className="loading">
+                            <div className="loading-spinner"></div>
+                            <span>Loading...</span>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        }>
+            <HomeContent />
+        </Suspense>
     );
 }

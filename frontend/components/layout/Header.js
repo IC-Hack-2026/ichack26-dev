@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { fetchCategories } from '../../lib/api';
 
 export default function Header() {
     const [date, setDate] = useState('');
+    const [categories, setCategories] = useState([]);
 
     useEffect(() => {
         const updateDate = () => {
@@ -20,6 +22,12 @@ export default function Header() {
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+        fetchCategories()
+            .then(data => setCategories(data.categories || []))
+            .catch(() => setCategories([]));
+    }, []);
+
     return (
         <header className="header">
             <div className="header-top">
@@ -32,11 +40,12 @@ export default function Header() {
 
             <nav className="header-nav">
                 <Link href="/" className="nav-link">Home</Link>
-                <Link href="/category/politics" className="nav-link">Politics</Link>
-                <Link href="/category/crypto" className="nav-link">Crypto</Link>
-                <Link href="/category/sports" className="nav-link">Sports</Link>
-                <Link href="/category/finance" className="nav-link">Finance</Link>
-                <Link href="/dev" className="nav-link nav-link-dev">Dev</Link>
+                {categories.map(cat => (
+                    <Link key={cat.name} href={`/category/${cat.name.toLowerCase()}`} className="nav-link">
+                        {cat.name}
+                    </Link>
+                ))}
+                <Link href="/dev" className="nav-link nav-link-dev">Anomalies</Link>
             </nav>
         </header>
     );

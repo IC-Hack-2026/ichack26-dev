@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Header from '../../../components/layout/Header';
 import ArticleCard from '../../../components/article/ArticleCard';
 
@@ -12,14 +12,25 @@ function formatCategoryName(name) {
     return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-export default function CategoryPage() {
+function CategoryPageContent() {
     const params = useParams();
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const categoryName = formatCategoryName(params.name || '');
 
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [sortBy, setSortBy] = useState('publishedAt');
-    const [probabilityFilter, setProbabilityFilter] = useState('0.6');
+
+    // Read filter state from URL params
+    const sortBy = searchParams.get('sort') || 'publishedAt';
+    const probabilityFilter = searchParams.get('prob') || '0.6';
+
+    // Update URL when filters change
+    const updateFilter = (key, value) => {
+        const params = new URLSearchParams(searchParams);
+        params.set(key, value);
+        router.replace(`?${params.toString()}`, { scroll: false });
+    };
 
     useEffect(() => {
         if (params.name) {
@@ -63,13 +74,13 @@ export default function CategoryPage() {
                             <div className="sort-controls">
                                 <button
                                     className={`sort-btn ${sortBy === 'publishedAt' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('publishedAt')}
+                                    onClick={() => updateFilter('sort', 'publishedAt')}
                                 >
                                     Latest
                                 </button>
                                 <button
                                     className={`sort-btn ${sortBy === 'probability' ? 'active' : ''}`}
-                                    onClick={() => setSortBy('probability')}
+                                    onClick={() => updateFilter('sort', 'probability')}
                                 >
                                     Most Likely
                                 </button>
@@ -78,19 +89,19 @@ export default function CategoryPage() {
                                 <span className="filter-label">Show:</span>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.6' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.6')}
+                                    onClick={() => updateFilter('prob', '0.6')}
                                 >
                                     60%+
                                 </button>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.7' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.7')}
+                                    onClick={() => updateFilter('prob', '0.7')}
                                 >
                                     70%+
                                 </button>
                                 <button
                                     className={`filter-btn ${probabilityFilter === '0.9' ? 'active' : ''}`}
-                                    onClick={() => setProbabilityFilter('0.9')}
+                                    onClick={() => updateFilter('prob', '0.9')}
                                 >
                                     90%+
                                 </button>
@@ -125,5 +136,25 @@ export default function CategoryPage() {
                 </section>
             </main>
         </div>
+    );
+}
+
+export default function CategoryPage() {
+    return (
+        <Suspense fallback={
+            <div className="page">
+                <Header />
+                <main className="main">
+                    <section className="content">
+                        <div className="loading">
+                            <div className="loading-spinner"></div>
+                            <span>Loading...</span>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        }>
+            <CategoryPageContent />
+        </Suspense>
     );
 }

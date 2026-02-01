@@ -4,6 +4,7 @@ import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
 import TimeAgo from '../common/TimeAgo';
 import RelatedArticles from './RelatedArticles';
+import { formatRelativeDate } from '../../lib/dateUtils';
 
 export default function ArticleFull({ article }) {
     if (!article) return null;
@@ -46,11 +47,7 @@ export default function ArticleFull({ article }) {
                             <path d="M12 6v6l4 2" />
                         </svg>
                         <span>
-                            Resolution: {new Date(article.expiresAt).toLocaleDateString('en-US', {
-                                month: 'long',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })}
+                            Resolution: {formatRelativeDate(article.expiresAt)}
                         </span>
                     </div>
                 )}

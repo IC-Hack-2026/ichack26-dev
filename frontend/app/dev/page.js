@@ -118,7 +118,7 @@ export default function DevPanel() {
             <main className="main">
                 <section className="dev-panel">
                     <div className="dev-header">
-                        <h1>Developer Panel</h1>
+                        <h1>Anomalies Panel</h1>
                         <StreamStatusBadge status={streamStatus} />
                     </div>
 

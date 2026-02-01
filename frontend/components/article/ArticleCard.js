@@ -3,18 +3,10 @@
 import Link from 'next/link';
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
-
-function formatResolutionDate(dateString) {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
+import { formatRelativeDate } from '../../lib/dateUtils';
 
 export default function ArticleCard({ article, index = 0 }) {
-    const resolutionDate = formatResolutionDate(article.expiresAt);
+    const resolutionDate = formatRelativeDate(article.expiresAt);
 
     return (
         <Link
