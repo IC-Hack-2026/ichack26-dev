@@ -16,6 +16,18 @@ const { streamProcessor } = require('./services/pipeline/stream-processor');
 const { createArticle } = require('./services/article/generator');
 const db = require('./db');
 
+// Pick the primary market from an event's markets (highest volume, then probability)
+function pickPrimaryMarket(markets) {
+    if (!markets || markets.length === 0) return null;
+    if (markets.length === 1) return markets[0];
+
+    return markets.reduce((best, market) => {
+        const bestScore = (best.totalVolume || 0) + (best.probability || 0) * 1000;
+        const marketScore = (market.totalVolume || 0) + (market.probability || 0) * 1000;
+        return marketScore > bestScore ? market : best;
+    });
+}
+
 const app = express();
 
 // Handle stream processor errors gracefully (don't crash the server)
@@ -219,77 +231,79 @@ app.listen(config.port, () => {
         return subscribed;
     }
 
-    // Auto-sync markets every 1 minute
+    // Auto-sync events every 1 minute
     const AUTO_SYNC_INTERVAL = 1 * 60 * 1000; // 1 minute
     setInterval(async () => {
         try {
-            console.log('[AutoSync] Starting periodic market sync...');
+            console.log('[AutoSync] Starting periodic event sync...');
 
-            // Dual-fetch: endingSoon + volume for diverse markets
-            const [endingSoonMarkets, volumeMarkets] = await Promise.all([
-                polymarket.fetchMarkets({
-                    limit: 1000,
-                    sortBy: 'endingSoon',
-                    minDaysUntilResolution: 1,
-                    maxDaysUntilResolution: 30
-                }),
-                polymarket.fetchMarkets({
-                    limit: 1000,
-                    sortBy: 'volume',
-                    minDaysUntilResolution: 1,
-                    maxDaysUntilResolution: 30
-                })
-            ]);
+            // Fetch events (groups of related markets) with date filtering
+            const events = await polymarket.fetchEvents({
+                limit: 500,
+                minDaysUntilResolution: 1,
+                maxDaysUntilResolution: 30
+            });
 
-            // Deduplicate by market ID (volume first for priority)
-            const seenIds = new Set();
-            const markets = [];
-            for (const market of [...volumeMarkets, ...endingSoonMarkets]) {
-                if (!seenIds.has(market.id)) {
-                    seenIds.add(market.id);
-                    markets.push(market);
-                }
-            }
-
-            console.log(`[AutoSync] Fetched ${volumeMarkets.length} volume + ${endingSoonMarkets.length} endingSoon = ${markets.length} unique markets`);
+            console.log(`[AutoSync] Fetched ${events.length} events`);
 
             let newEvents = 0;
             let newArticles = 0;
             let newSubscriptions = 0;
 
-            for (const market of markets) {
-                // Check if event already exists
-                const existingEvent = await db.events.getById(market.id);
+            for (const event of events) {
+                // Pick the primary market for this event
+                const primaryMarket = pickPrimaryMarket(event.markets);
+                if (!primaryMarket) continue;
 
-                // Upsert event
+                // Check if event already exists
+                const existingEvent = await db.events.getById(event.id);
+
+                // Upsert event using the event ID (not market ID) for deduplication
                 await db.events.upsert({
-                    id: market.id,
-                    slug: market.slug,
-                    title: market.question,
-                    description: market.description,
-                    category: market.category,
-                    endDate: market.endDate,
+                    id: event.id,
+                    slug: event.slug,
+                    title: event.title,
+                    description: event.description,
+                    category: event.category,
+                    endDate: event.endDate,
                     resolved: false,
-                    rawData: market.rawData
+                    rawData: primaryMarket.rawData
                 });
 
                 if (!existingEvent) {
                     newEvents++;
                 }
 
-                // Generate article if it doesn't exist
-                const existingArticle = await db.articles.getByEventId(market.id);
+                // Generate article if it doesn't exist (using event.id for deduplication)
+                const existingArticle = await db.articles.getByEventId(event.id);
                 if (!existingArticle) {
-                    const prediction = await db.predictions.getLatestByEventId(market.id);
-                    const article = await createArticle(market, prediction || { adjustedProbability: market.probability });
+                    const prediction = await db.predictions.getLatestByEventId(event.id);
+                    // Pass event-level data with primary market's probability/outcomes
+                    const articleEvent = {
+                        id: event.id,
+                        title: event.title,
+                        question: event.title,
+                        description: event.description,
+                        category: event.category,
+                        endDate: event.endDate,
+                        image: event.image,
+                        probability: primaryMarket.probability,
+                        outcomes: primaryMarket.outcomes,
+                        rawData: primaryMarket.rawData
+                    };
+                    const article = await createArticle(articleEvent, prediction || { adjustedProbability: primaryMarket.probability });
                     if (article) {
                         newArticles++;
-                        // Only subscribe if article was created
-                        newSubscriptions += subscribeToMarketTokens(market);
+                        // Subscribe to all markets in this event for real-time updates
+                        for (const market of event.markets) {
+                            newSubscriptions += subscribeToMarketTokens(market);
+                        }
                     }
                 } else {
                     // Article exists - subscribe to keep it updated
-                    newSubscriptions += subscribeToMarketTokens(market);
+                    for (const market of event.markets) {
+                        newSubscriptions += subscribeToMarketTokens(market);
+                    }
                 }
             }
 
@@ -302,62 +316,65 @@ app.listen(config.port, () => {
     // Also run an initial sync after a short delay to populate data on startup
     setTimeout(async () => {
         try {
-            console.log('[InitialSync] Running initial market sync...');
+            console.log('[InitialSync] Running initial event sync...');
 
-            // Dual-fetch: endingSoon + volume for diverse markets
-            const [endingSoonMarkets, volumeMarkets] = await Promise.all([
-                polymarket.fetchMarkets({
-                    limit: 1000,
-                    sortBy: 'endingSoon',
-                    minDaysUntilResolution: 1,
-                    maxDaysUntilResolution: 30
-                }),
-                polymarket.fetchMarkets({
-                    limit: 1000,
-                    sortBy: 'volume',
-                    minDaysUntilResolution: 1,
-                    maxDaysUntilResolution: 30
-                })
-            ]);
+            // Fetch events (groups of related markets) with date filtering
+            const events = await polymarket.fetchEvents({
+                limit: 500,
+                minDaysUntilResolution: 1,
+                maxDaysUntilResolution: 30
+            });
 
-            // Deduplicate by market ID (volume first for priority)
-            const seenIds = new Set();
-            const markets = [];
-            for (const market of [...volumeMarkets, ...endingSoonMarkets]) {
-                if (!seenIds.has(market.id)) {
-                    seenIds.add(market.id);
-                    markets.push(market);
-                }
-            }
-
-            console.log(`[InitialSync] Fetched ${volumeMarkets.length} volume + ${endingSoonMarkets.length} endingSoon = ${markets.length} unique markets`);
+            console.log(`[InitialSync] Fetched ${events.length} events`);
 
             let syncedArticles = 0;
             let totalSubscriptions = 0;
 
-            for (const market of markets) {
+            for (const event of events) {
+                // Pick the primary market for this event
+                const primaryMarket = pickPrimaryMarket(event.markets);
+                if (!primaryMarket) continue;
+
+                // Upsert event using the event ID (not market ID) for deduplication
                 await db.events.upsert({
-                    id: market.id,
-                    slug: market.slug,
-                    title: market.question,
-                    description: market.description,
-                    category: market.category,
-                    endDate: market.endDate,
+                    id: event.id,
+                    slug: event.slug,
+                    title: event.title,
+                    description: event.description,
+                    category: event.category,
+                    endDate: event.endDate,
                     resolved: false,
-                    rawData: market.rawData
+                    rawData: primaryMarket.rawData
                 });
 
-                const existingArticle = await db.articles.getByEventId(market.id);
+                const existingArticle = await db.articles.getByEventId(event.id);
                 if (!existingArticle) {
-                    const article = await createArticle(market, { adjustedProbability: market.probability });
+                    // Pass event-level data with primary market's probability/outcomes
+                    const articleEvent = {
+                        id: event.id,
+                        title: event.title,
+                        question: event.title,
+                        description: event.description,
+                        category: event.category,
+                        endDate: event.endDate,
+                        image: event.image,
+                        probability: primaryMarket.probability,
+                        outcomes: primaryMarket.outcomes,
+                        rawData: primaryMarket.rawData
+                    };
+                    const article = await createArticle(articleEvent, { adjustedProbability: primaryMarket.probability });
                     if (article) {
                         syncedArticles++;
-                        // Only subscribe if article was created
-                        totalSubscriptions += subscribeToMarketTokens(market);
+                        // Subscribe to all markets in this event for real-time updates
+                        for (const market of event.markets) {
+                            totalSubscriptions += subscribeToMarketTokens(market);
+                        }
                     }
                 } else {
                     // Article exists - subscribe to keep it updated
-                    totalSubscriptions += subscribeToMarketTokens(market);
+                    for (const market of event.markets) {
+                        totalSubscriptions += subscribeToMarketTokens(market);
+                    }
                 }
             }
 
@@ -367,7 +384,7 @@ app.listen(config.port, () => {
             const loaded = probabilityAdjuster.loadFromHistory(recentWhales);
             console.log(`[InitialSync] Loaded ${loaded} whale signals from history`);
 
-            console.log(`[InitialSync] Completed: ${markets.length} events, ${syncedArticles} articles, ${totalSubscriptions} subscriptions (total: ${streamProcessor.subscriptions.size})`);
+            console.log(`[InitialSync] Completed: ${events.length} events, ${syncedArticles} articles, ${totalSubscriptions} subscriptions (total: ${streamProcessor.subscriptions.size})`);
         } catch (error) {
             console.error('[InitialSync] Failed:', error.message);
         }

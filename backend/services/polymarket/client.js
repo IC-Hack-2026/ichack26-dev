@@ -306,11 +306,28 @@ async function fetchMarketBySlug(slug) {
 }
 
 // Fetch events (groups of related markets)
-async function fetchEvents({ limit = 20 } = {}) {
-    const cacheKey = `events:${limit}`;
+async function fetchEvents({
+    limit = 20,
+    minDaysUntilResolution = null,
+    maxDaysUntilResolution = null
+} = {}) {
+    const cacheKey = `events:${limit}:${minDaysUntilResolution}:${maxDaysUntilResolution}`;
 
     return cache.getOrSet(cacheKey, async () => {
-        const apiUrl = `${POLYMARKET_API}/events?active=true&closed=false&limit=${limit}&order=volume24hr&ascending=false`;
+        let apiUrl = `${POLYMARKET_API}/events?active=true&closed=false&limit=${limit}&order=volume24hr&ascending=false`;
+
+        // Add server-side date filtering if specified
+        if (minDaysUntilResolution != null || maxDaysUntilResolution != null) {
+            const now = Date.now();
+            if (minDaysUntilResolution != null) {
+                const minDate = new Date(now + minDaysUntilResolution * 24 * 60 * 60 * 1000);
+                apiUrl += `&end_date_min=${minDate.toISOString()}`;
+            }
+            if (maxDaysUntilResolution != null) {
+                const maxDate = new Date(now + maxDaysUntilResolution * 24 * 60 * 60 * 1000);
+                apiUrl += `&end_date_max=${maxDate.toISOString()}`;
+            }
+        }
 
         const response = await fetch(apiUrl);
         if (!response.ok) {
