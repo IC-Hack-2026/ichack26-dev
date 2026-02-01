@@ -332,10 +332,10 @@ router.get('/whale-trades', async (req, res) => {
         // Enrich trades with event metadata (in-memory registry first, then database fallback)
         const enrichedTrades = await Promise.all(trades.map(async (trade) => {
             // Calculate probability delta based on whale trade formula
-            // delta = direction * Math.min(depthPercent / 20, 1) * 0.15
+            // delta = direction * Math.min(depthPercent / 20, 1) * 0.0075
             const direction = trade.side === 'BUY' ? 1 : -1;
             const strength = Math.min((trade.depthPercent || 0) / 20, 1);
-            const probabilityDelta = direction * strength * 0.15;
+            const probabilityDelta = direction * strength * 0.0075;
 
             // If metadata already exists, return with delta
             if (trade.eventTitle) {
