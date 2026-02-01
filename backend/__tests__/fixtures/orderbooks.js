@@ -82,11 +82,66 @@ const deepOrderbook = {
     ]
 };
 
+// WebSocket book snapshot message format
+const bookSnapshot = {
+    event_type: 'book',
+    asset_id: '0x123abc456def',
+    bids: [
+        { price: '0.60', size: '1000' },
+        { price: '0.59', size: '2000' },
+        { price: '0.58', size: '3000' }
+    ],
+    asks: [
+        { price: '0.61', size: '1000' },
+        { price: '0.62', size: '2000' },
+        { price: '0.63', size: '3000' }
+    ],
+    timestamp: '1704067200000',
+    hash: 'snapshot_hash_abc123'
+};
+
+// WebSocket price_change message format (array of changes)
+const priceChangeMessages = [
+    { asset_id: '0x123abc456def', price: '0.595', size: '500', side: 'BUY' },
+    { asset_id: '0x123abc456def', price: '0.61', size: '0', side: 'SELL' },
+    { asset_id: '0x123abc456def', price: '0.60', size: '1500', side: 'BUY' }
+];
+
+// Single price change for adding a new level
+const priceChangeAdd = {
+    asset_id: '0x123abc456def',
+    price: '0.575',
+    size: '750',
+    side: 'BUY'
+};
+
+// Single price change for removing a level (size = 0)
+const priceChangeRemove = {
+    asset_id: '0x123abc456def',
+    price: '0.60',
+    size: '0',
+    side: 'BUY'
+};
+
+// Price change with alternative field names
+const priceChangeAltFields = {
+    assetId: '0x123abc456def',
+    price: '0.59',
+    size: '800',
+    side: 'BUY'
+};
+
 module.exports = {
     standardOrderbook,
     thinOrderbook,
     emptyOrderbook,
     arrayFormatOrderbook,
     alternativeFieldOrderbook,
-    deepOrderbook
+    deepOrderbook,
+    // WebSocket message fixtures
+    bookSnapshot,
+    priceChangeMessages,
+    priceChangeAdd,
+    priceChangeRemove,
+    priceChangeAltFields
 };

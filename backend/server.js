@@ -4,6 +4,7 @@ const cors = require('cors');
 const config = require('./config');
 const articlesRouter = require('./api/routes/articles');
 const internalRouter = require('./api/routes/internal');
+const orderbookRouter = require('./api/routes/orderbook');
 
 // Legacy polymarket routes (for backwards compatibility)
 const polymarket = require('./services/polymarket/client');
@@ -21,44 +22,20 @@ const lastRegenerationTime = new Map();
 
 const app = express();
 
-// Set up stream processor event listeners
-streamProcessor.on('signal', async ({ signal, trade, market }) => {
-    try {
-        const result = await predictionEngine.processRealTimeSignal(signal, market);
-        console.log(`[Signal] ${signal.signalType} detected for market ${market?.id || 'unknown'}`);
+// Set up stream processor event listeners - DISABLED
+// streamProcessor.on('signal', async ({ signal, trade, market }) => {
+//     try {
+//         await predictionEngine.processRealTimeSignal(signal, market);
+//         console.log(`[Signal] ${signal.signalType} detected for market ${market?.id || 'unknown'}`);
+//     } catch (error) {
+//         console.error('Error processing real-time signal:', error);
+//     }
+// });
 
-        // Check if the signal is significant enough to trigger article regeneration
-        const adjustment = Math.abs(result.adjustment);
-        if (adjustment > SIGNIFICANCE_THRESHOLD) {
-            const eventId = signal.eventId || market?.id;
-            if (eventId) {
-                const now = Date.now();
-                const lastRegen = lastRegenerationTime.get(eventId) || 0;
-
-                // Check debounce: only regenerate if enough time has passed
-                if (now - lastRegen >= REGENERATION_DEBOUNCE_MS) {
-                    lastRegenerationTime.set(eventId, now);
-                    console.log(`[Signal] Significant adjustment (${(adjustment * 100).toFixed(1)}%) - triggering article regeneration for event ${eventId}`);
-
-                    // Regenerate article asynchronously (don't block signal processing)
-                    regenerateArticleForEvent(eventId).catch(err => {
-                        console.error(`[Signal] Failed to regenerate article for event ${eventId}:`, err.message);
-                    });
-                } else {
-                    const waitTime = Math.ceil((REGENERATION_DEBOUNCE_MS - (now - lastRegen)) / 1000);
-                    console.log(`[Signal] Significant adjustment but debounced - next regeneration for event ${eventId} in ${waitTime}s`);
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error processing real-time signal:', error);
-    }
-});
-
-// Handle stream processor errors gracefully (don't crash the server)
-streamProcessor.on('error', (error) => {
-    console.error('Stream processor error:', error.message || error);
-});
+// Handle stream processor errors gracefully (don't crash the server) - DISABLED
+// streamProcessor.on('error', (error) => {
+//     console.error('Stream processor error:', error.message || error);
+// });
 
 // Middleware
 app.use(cors());
@@ -69,6 +46,9 @@ app.use('/api/articles', articlesRouter);
 
 // Internal API Routes - Admin/debugging
 app.use('/api/internal', internalRouter);
+
+// Order Book API Routes - Real-time order book data
+app.use('/api/orderbook', orderbookRouter);
 
 // Legacy Routes - Keep existing market endpoints for backward compatibility
 app.get('/api/markets', async (req, res) => {
@@ -171,11 +151,11 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Graceful shutdown handling
-process.on('SIGTERM', async () => {
-    await streamProcessor.stop();
-    process.exit(0);
-});
+// Graceful shutdown handling - DISABLED
+// process.on('SIGTERM', async () => {
+//     await streamProcessor.stop();
+//     process.exit(0);
+// });
 
 // Start the server
 app.listen(config.port, () => {
@@ -201,19 +181,24 @@ app.listen(config.port, () => {
     console.log('  GET /api/internal/wallets/:address - Wallet profile');
     console.log('  GET /api/internal/stream/status   - Stream processor health');
     console.log('');
+    console.log('Order Book API:');
+    console.log('  GET /api/orderbook                - All order books summary');
+    console.log('  GET /api/orderbook/:assetId       - Full order book');
+    console.log('  GET /api/orderbook/:assetId/depth - Top N levels');
+    console.log('');
     console.log('Status:');
     console.log(`  OpenAI: ${config.openai.apiKey ? 'Configured' : 'Not configured (using fallback)'}`);
     console.log(`  Database: ${config.db.useInMemory ? 'In-memory' : 'PostgreSQL'}`);
-    console.log(`  Real-time: ${config.realtime?.enabled ? 'Enabled' : 'Disabled'}`);
+    console.log(`  Real-time: Disabled`);
 
-    // Start stream processor if real-time is enabled
-    if (config.realtime?.enabled) {
-        streamProcessor.start().then(() => {
-            console.log('Real-time stream processor started');
-        }).catch(err => {
-            console.error('Failed to start stream processor:', err);
-        });
-    }
+    // Start stream processor if real-time is enabled - DISABLED
+    // if (config.realtime?.enabled) {
+    //     streamProcessor.start().then(() => {
+    //         console.log('Real-time stream processor started');
+    //     }).catch(err => {
+    //         console.error('Failed to start stream processor:', err);
+    //     });
+    // }
 
     // Auto-sync markets every 5 minutes
     const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes

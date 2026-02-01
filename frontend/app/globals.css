@@ -1,27 +1,27 @@
 :root {
-    /* Backgrounds - light and clean */
-    --bg-primary: #ffffff;
-    --bg-secondary: #f6f6f6;
-    --bg-elevated: #ffffff;
-    --bg-hover: #e8e8e8;
+    /* Backgrounds - Financial Times cream and light palette */
+    --bg-primary: #fffcf9;          /* Warm cream */
+    --bg-secondary: #f6ede4;        /* Soft beige */
+    --bg-elevated: #fefdfb;         /* Slightly warmer white */
+    --bg-hover: #ede3d8;            /* Warm hover */
 
-    /* Text - strong contrast */
-    --text-primary: #121212;
-    --text-secondary: #707070;
-    --text-muted: #999999;
+    /* Text - sophisticated grays */
+    --text-primary: #1a1a1a;        /* Deep charcoal */
+    --text-secondary: #5a5a5a;      /* Medium gray */
+    --text-muted: #8a8a8a;          /* Light gray */
 
-    /* Accents - Guardian-inspired */
-    --accent-primary: #052962;      /* Guardian blue */
-    --accent-secondary: #c70000;    /* Breaking news red */
-    --accent-link: #506991;         /* Muted link blue */
+    /* Accents - Financial Times iconic */
+    --accent-primary: #cc0000;      /* FT pink/red */
+    --accent-secondary: #0d7680;    /* Teal/slate */
+    --accent-link: #33a1ff;         /* FT blue */
 
     /* Borders */
-    --border-subtle: #dcdcdc;
-    --border-medium: #c4c4c4;
-    --border-strong: #333333;
+    --border-subtle: #ddd5cc;
+    --border-medium: #c9bfb5;
+    --border-strong: #2a2a2a;
 
-    /* Fonts - traditional news */
-    --font-display: Georgia, 'Guardian Egyptian', serif;
+    /* Fonts - traditional financial */
+    --font-display: Georgia, 'Plantin', serif;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     --font-mono: 'Courier New', Courier, monospace;
 
@@ -113,7 +113,7 @@ body {
     padding: 0.35rem 0.7rem;
     border: none;
     border-radius: 999px;
-    background: var(--accent-secondary);
+    background: var(--accent-primary);
     color: #ffffff;
     font-size: 0.7rem;
     font-weight: 700;
@@ -137,10 +137,10 @@ body {
 @keyframes live-pulse {
     0%,
     100% {
-        box-shadow: 0 0 0 rgba(199, 0, 0, 0.3);
+        box-shadow: 0 0 0 rgba(204, 0, 0, 0.3);
     }
     50% {
-        box-shadow: 0 0 0.75rem rgba(199, 0, 0, 0.6);
+        box-shadow: 0 0 0.75rem rgba(204, 0, 0, 0.6);
     }
 }
 
@@ -431,6 +431,7 @@ body {
     flex-direction: column;
     background: var(--bg-primary);
     border: 1px solid var(--border-subtle);
+    border-top: 3px solid var(--border-subtle);
     overflow: hidden;
     text-decoration: none;
     transition: border-color 200ms, box-shadow 200ms;
@@ -438,7 +439,8 @@ body {
 
 .article-card:hover {
     border-color: var(--border-medium);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-top-color: var(--accent-primary);
+    box-shadow: 0 2px 8px rgba(204, 0, 0, 0.08);
 }
 
 .article-card:hover .article-card-headline {
@@ -507,15 +509,16 @@ body {
     letter-spacing: 0.05em;
     border-radius: var(--radius-sm);
     background: var(--bg-secondary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-subtle);
+    color: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
     text-decoration: none;
     transition: all var(--transition-fast);
 }
 
 .category-pill:hover {
-    background: var(--bg-hover);
-    border-color: var(--border-medium);
+    background: var(--accent-primary);
+    color: #ffffff;
+    border-color: var(--accent-primary);
 }
 
 /* All categories use the same understated style */
@@ -545,7 +548,7 @@ body {
     gap: 0.5rem;
     padding: 0.375rem 0.75rem;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-medium);
+    border: 1px solid var(--accent-primary);
     border-radius: var(--radius-md);
 }
 
@@ -556,15 +559,15 @@ body {
 @keyframes badge-pulse {
     0% {
         transform: scale(1);
-        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+        box-shadow: 0 0 0 rgba(204, 0, 0, 0);
     }
     45% {
         transform: scale(1.04);
-        box-shadow: 0 0 0.5rem rgba(5, 41, 98, 0.2);
+        box-shadow: 0 0 0.5rem rgba(204, 0, 0, 0.2);
     }
     100% {
         transform: scale(1);
-        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+        box-shadow: 0 0 0 rgba(204, 0, 0, 0);
     }
 }
 
@@ -572,6 +575,7 @@ body {
     font-family: var(--font-mono);
     font-size: 0.875rem;
     font-weight: 700;
+    color: var(--accent-primary);
 }
 
 .badge-label {
@@ -596,7 +600,7 @@ body {
 /* Moderate prominence probability badges with muted colors */
 .probability-badge.prob-high {
     border-color: #2d7e2f;
-    background: #f1f8f2;
+    background: #f8fcf9;
 }
 
 .probability-badge.prob-high .badge-value {
@@ -605,7 +609,7 @@ body {
 
 .probability-badge.prob-medium {
     border-color: var(--accent-link);
-    background: #f5f7fa;
+    background: #fafbfd;
 }
 
 .probability-badge.prob-medium .badge-value {
@@ -613,21 +617,22 @@ body {
 }
 
 .probability-badge.prob-low {
-    border-color: #d84315;
-    background: #fef5f3;
-}
-
-.probability-badge.prob-low .badge-value {
-    color: #d84315;
-}
-
-.probability-badge.prob-very-low {
-    border-color: var(--accent-secondary);
+    border-color: #cc0000;
     background: #fff5f5;
 }
 
+.probability-badge.prob-low .badge-value {
+    color: #cc0000;
+}
+
+.probability-badge.prob-very-low {
+    border-color: #b30000;
+    background: #fff9f9;
+}
+
 .probability-badge.prob-very-low .badge-value {
-    color: var(--accent-secondary);
+    color: #b30000;
+    font-weight: 800;
 }
 
 /* Article Container (Full Page) */
@@ -702,6 +707,7 @@ body {
     padding: 1rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border-subtle);
+    border-left: 4px solid var(--accent-primary);
     border-radius: var(--radius-md);
 }
 
