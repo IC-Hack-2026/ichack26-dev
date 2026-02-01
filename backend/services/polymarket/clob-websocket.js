@@ -232,7 +232,7 @@ class ClobWebSocketClient extends EventEmitter {
 
     _handleMessage(event) {
         // Log ALL raw WebSocket messages
-        console.log('[WS Raw]', event.data);
+        // console.log('[WS Raw]', event.data);
 
         try {
             // Handle non-JSON messages (e.g., "INVALID OPERATION")

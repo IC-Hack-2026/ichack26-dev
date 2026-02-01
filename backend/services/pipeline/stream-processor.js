@@ -156,16 +156,13 @@ class StreamProcessor extends EventEmitter {
      */
     async processTrade(tradeData) {
         try {
-            // Debug: log raw trade data
-            console.log('StreamProcessor: Raw trade data:', JSON.stringify(tradeData, null, 2));
-
             // Extract trade info
             const trade = this._normalizeTradeData(tradeData);
 
             // Record trade in database
             await db.tradeHistory.record(trade);
 
-            // Track wallet activity
+            // Track wallet activity (returns null if no wallet address)
             await walletTracker.trackTrade(trade);
 
             // Emit trade event
@@ -319,11 +316,11 @@ class StreamProcessor extends EventEmitter {
         // Handle orderbook updates
         clobWebSocketClient.on('book', async (data) => {
             const tokenId = data.asset_id || data.assetId || data.market;
-            console.log(`[OrderBook] ${tokenId}:`, JSON.stringify({
-                bids: data.bids?.slice(0, 3),  // Top 3 bids
-                asks: data.asks?.slice(0, 3),  // Top 3 asks
-                timestamp: new Date().toISOString()
-            }));
+            // console.log(`[OrderBook] ${tokenId}:`, JSON.stringify({
+            //     bids: data.bids?.slice(0, 3),  // Top 3 bids
+            //     asks: data.asks?.slice(0, 3),  // Top 3 asks
+            //     timestamp: new Date().toISOString()
+            // }));
             if (tokenId) {
                 await this.processOrderBookUpdate(tokenId, data);
             }
