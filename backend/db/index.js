@@ -68,6 +68,8 @@ const store = {
     events: new Map(),
     predictions: new Map(),
     articles: new Map(),
+    articlesByEventId: new Map(),  // Index for O(1) deduplication by eventId
+    articlesBySlug: new Map(),     // Index for O(1) deduplication by slug
     signals: new Map(),
     backtestRuns: [],
     // New collections for insider trading detection
@@ -171,8 +173,19 @@ const predictions = {
 // Article operations
 const articles = {
     async create(article) {
-        const id = Date.now().toString();
+        // Database-level deduplication: check if article for this event already exists
+        if (article.eventId && store.articlesByEventId.has(article.eventId)) {
+            return store.articlesByEventId.get(article.eventId);
+        }
+
         const slug = article.slug || slugify(article.headline);
+
+        // Deduplicate by slug (prevents duplicate articles with similar headlines)
+        if (store.articlesBySlug.has(slug)) {
+            return store.articlesBySlug.get(slug);
+        }
+
+        const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
         const record = {
             id,
             ...article,
@@ -181,6 +194,14 @@ const articles = {
             createdAt: new Date().toISOString()
         };
         store.articles.set(id, record);
+
+        // Add to eventId index for O(1) lookups
+        if (article.eventId) {
+            store.articlesByEventId.set(article.eventId, record);
+        }
+        // Add to slug index for O(1) lookups
+        store.articlesBySlug.set(slug, record);
+
         return record;
     },
 
@@ -189,6 +210,15 @@ const articles = {
         if (!existing) return null;
         const updated = { ...existing, ...updates };
         store.articles.set(id, updated);
+
+        // Update the eventId index as well
+        if (updated.eventId) {
+            store.articlesByEventId.set(updated.eventId, updated);
+        }
+        // Update the slug index as well
+        if (updated.slug) {
+            store.articlesBySlug.set(updated.slug, updated);
+        }
         return updated;
     },
 
@@ -204,10 +234,8 @@ const articles = {
     },
 
     async getByEventId(eventId) {
-        for (const article of store.articles.values()) {
-            if (article.eventId === eventId) return article;
-        }
-        return null;
+        // O(1) lookup using the eventId index
+        return store.articlesByEventId.get(eventId) || null;
     },
 
     async getAll({

@@ -22,14 +22,14 @@ router.get('/', async (req, res) => {
             sort = 'publishedAt'
         } = req.query;
 
-        // Get articles from database (filter to 1-14 days until expiry)
+        // Get articles from database (filter to 1-30 days until expiry)
         let articles = await db.articles.getAll({
             limit: parseInt(limit),
             offset: parseInt(offset),
             category,
             sort,
             minDaysUntilExpiry: 1,
-            maxDaysUntilExpiry: 14
+            maxDaysUntilExpiry: 30
         });
 
         // If no articles yet, generate some from Polymarket
@@ -37,32 +37,59 @@ router.get('/', async (req, res) => {
             // Use tag parameter if category is specified to get properly categorized markets
             const tagSlug = category ? category.toLowerCase() : null;
 
-            const markets = await polymarket.fetchMarkets({
-                limit: parseInt(limit),
-                sortBy: 'endingSoon',
-                tag: tagSlug,
-                minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 14
-            });
+            if (tagSlug) {
+                // Fetching for a specific category
+                const markets = await polymarket.fetchMarkets({
+                    limit: parseInt(limit),
+                    sortBy: 'endingSoon',
+                    tag: tagSlug,
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                });
 
-            // Generate articles for each market
-            for (const market of markets) {
-                // Override category with the requested one if fetched via tag
-                if (category) {
+                // Generate articles for each market
+                for (const market of markets) {
+                    // Override category with the requested one if fetched via tag
                     market.category = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+                    const prediction = await predictionEngine.calculatePrediction(market, market);
+                    const article = await articleGenerator.createArticle(market, prediction);
+                    // Skip null results (filtered out by probability or meaningfulness)
+                    if (!article) continue;
                 }
-                const prediction = await predictionEngine.calculatePrediction(market, market);
-                await articleGenerator.createArticle(market, prediction);
+            } else {
+                // No category specified: fetch from multiple categories for balanced distribution
+                const categories = ['Politics', 'Finance', 'Sports', 'Crypto', 'Technology'];
+                const limitPerCategory = Math.ceil(parseInt(limit) / categories.length);
+
+                await Promise.all(categories.map(async (cat) => {
+                    try {
+                        const markets = await polymarket.fetchMarkets({
+                            limit: limitPerCategory,
+                            sortBy: 'endingSoon',
+                            tag: cat.toLowerCase(),
+                            minDaysUntilResolution: 1,
+                            maxDaysUntilResolution: 30
+                        });
+
+                        for (const market of markets) {
+                            market.category = cat;
+                            const prediction = await predictionEngine.calculatePrediction(market, market);
+                            await articleGenerator.createArticle(market, prediction);
+                        }
+                    } catch (err) {
+                        console.error(`[Articles] Failed to fetch ${cat} markets:`, err.message);
+                    }
+                }));
             }
 
-            // Fetch the newly created articles (filter to 1-14 days until expiry)
+            // Fetch the newly created articles (filter to 1-30 days until expiry)
             articles = await db.articles.getAll({
                 limit: parseInt(limit),
                 offset: parseInt(offset),
                 category,
                 sort,
                 minDaysUntilExpiry: 1,
-                maxDaysUntilExpiry: 14
+                maxDaysUntilExpiry: 30
             });
         }
 
@@ -74,7 +101,7 @@ router.get('/', async (req, res) => {
                 sortBy: 'endingSoon',
                 tag: tagSlug,
                 minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 14
+                maxDaysUntilResolution: 30
             });
 
             // Generate articles from tagged markets
@@ -85,7 +112,9 @@ router.get('/', async (req, res) => {
                     // Override category with the requested one
                     market.category = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
                     const prediction = await predictionEngine.calculatePrediction(market, market);
-                    await articleGenerator.createArticle(market, prediction);
+                    const article = await articleGenerator.createArticle(market, prediction);
+                    // Skip null results (filtered out by probability or meaningfulness)
+                    if (!article) continue;
                 }
             }
 
@@ -96,7 +125,7 @@ router.get('/', async (req, res) => {
                 category,
                 sort,
                 minDaysUntilExpiry: 1,
-                maxDaysUntilExpiry: 14
+                maxDaysUntilExpiry: 30
             });
         }
 
@@ -117,7 +146,7 @@ router.get('/', async (req, res) => {
 router.get('/featured', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 5;
-        let articles = await db.articles.getFeatured(limit, 1, 14);
+        let articles = await db.articles.getFeatured(limit, 1, 30);
 
         // If no articles, generate from top markets
         if (articles.length === 0) {
@@ -125,15 +154,17 @@ router.get('/featured', async (req, res) => {
                 limit,
                 sortBy: 'endingSoon',
                 minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 14
+                maxDaysUntilResolution: 30
             });
 
             for (const market of markets) {
                 const prediction = await predictionEngine.calculatePrediction(market, market);
-                await articleGenerator.createArticle(market, prediction);
+                const article = await articleGenerator.createArticle(market, prediction);
+                // Skip null results (filtered out by probability or meaningfulness)
+                if (!article) continue;
             }
 
-            articles = await db.articles.getFeatured(limit, 1, 14);
+            articles = await db.articles.getFeatured(limit, 1, 30);
         }
 
         // Format articles with live probabilities
@@ -205,6 +236,11 @@ router.get('/:slug', async (req, res) => {
 
             const prediction = await predictionEngine.calculatePrediction(market, market);
             article = await articleGenerator.createArticle(market, prediction);
+
+            // Article may be null if filtered out (low probability or meaningless)
+            if (!article) {
+                return res.status(404).json({ error: 'Article not available' });
+            }
         }
 
         res.json(await formatArticleFull(article));

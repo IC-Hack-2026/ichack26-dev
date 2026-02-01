@@ -206,7 +206,7 @@ app.listen(config.port, () => {
                 limit: 500,
                 sortBy: 'endingSoon',
                 minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 14
+                maxDaysUntilResolution: 30
             });
 
             let newEvents = 0;
@@ -274,7 +274,7 @@ app.listen(config.port, () => {
                 limit: 500,
                 sortBy: 'endingSoon',
                 minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 14
+                maxDaysUntilResolution: 30
             });
 
             let syncedArticles = 0;
