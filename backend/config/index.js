@@ -24,11 +24,17 @@ module.exports = {
         useInMemory: !process.env.REDIS_URL
     },
 
-    // OpenAI
-    openai: {
-        apiKey: process.env.OPENAI_API_KEY || '',
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
-    },
+    // OpenAI / Groq (OpenAI-compatible)
+    openai: (() => {
+        const useGroq = !!process.env.GROQ_API_KEY;
+        return {
+            apiKey: process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '',
+            model: useGroq
+                ? (process.env.GROQ_MODEL || 'llama-3.1-70b-versatile')
+                : (process.env.OPENAI_MODEL || 'gpt-4o-mini'),
+            baseURL: useGroq ? 'https://api.groq.com/openai/v1' : undefined
+        };
+    })(),
 
     // Polymarket API
     polymarket: {
