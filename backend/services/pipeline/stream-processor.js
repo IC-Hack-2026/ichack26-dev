@@ -15,13 +15,6 @@ const { assetRegistry } = require('../orderbook/asset-registry');
 const db = require('../../db');
 const config = require('../../config');
 
-// Import all signal processors
-const { freshWalletProcessor } = require('../signals/processors/fresh-wallet');
-const { liquidityImpactProcessor } = require('../signals/processors/liquidity-impact');
-const { walletAccuracyProcessor } = require('../signals/processors/wallet-accuracy');
-const { timingPatternProcessor } = require('../signals/processors/timing-pattern');
-const { sniperClusterProcessor } = require('../signals/processors/sniper-cluster');
-
 /**
  * StreamProcessor orchestrates real-time data processing for insider trading detection.
  * It connects to the Polymarket WebSocket, processes trades and orderbook updates,
@@ -34,20 +27,12 @@ class StreamProcessor extends EventEmitter {
         // Initialize state
         this.running = false;
         this.subscriptions = new Map(); // tokenId -> subscription info
-        this.processors = [
-            freshWalletProcessor,
-            liquidityImpactProcessor,
-            walletAccuracyProcessor,
-            timingPatternProcessor,
-            sniperClusterProcessor
-        ];
 
         // Initialize whale detector
         this.whaleDetector = new WhaleDetector(orderBookManager);
 
         // Statistics
         this.processedTrades = 0;
-        this.detectedSignals = 0;
         this.detectedWhaleTrades = 0;
         this.startTime = null;
 
@@ -176,46 +161,6 @@ class StreamProcessor extends EventEmitter {
             // Emit trade event
             this.emit('trade', trade);
 
-            // Get market info for signal processing
-            const market = await this._getMarketInfo(trade.tokenId);
-            const event = await this._getEventInfo(trade.tokenId);
-
-            // Run all signal processors against the trade
-            for (const processor of this.processors) {
-                try {
-                    const signal = await processor.process(event, market, trade);
-
-                    if (signal.detected) {
-                        this.detectedSignals++;
-
-                        // Emit signal event
-                        this.emit('signal', {
-                            signal: {
-                                ...signal,
-                                processorName: processor.name,
-                                weight: processor.weight
-                            },
-                            trade,
-                            market
-                        });
-
-                        // Record detected pattern in database
-                        await db.detectedPatterns.record({
-                            type: processor.name,
-                            eventId: event?.id || trade.tokenId,
-                            tokenId: trade.tokenId,
-                            confidence: signal.confidence,
-                            direction: signal.direction,
-                            severity: signal.severity,
-                            metadata: signal.metadata,
-                            tradeId: trade.id
-                        });
-                    }
-                } catch (processorError) {
-                    console.error(`StreamProcessor: Error in processor ${processor.name}:`, processorError.message);
-                }
-            }
-
             this.processedTrades++;
         } catch (error) {
             this.emit('error', error);
@@ -225,7 +170,7 @@ class StreamProcessor extends EventEmitter {
 
     /**
      * Process an orderbook update
-     * Records snapshot and detects liquidity changes
+     * Records snapshot for liquidity tracking
      * @param {string} tokenId - The market/token ID
      * @param {Object} orderbook - Orderbook data with bids and asks
      */
@@ -233,56 +178,6 @@ class StreamProcessor extends EventEmitter {
         try {
             // Record snapshot
             await liquidityTracker.recordSnapshot(tokenId, orderbook);
-
-            // Detect liquidity changes
-            const liquidityChange = await liquidityTracker.calculateLiquidityChange(tokenId);
-
-            if (liquidityChange) {
-                // Check for significant liquidity drop (potential insider preparation)
-                const significantDrop = await liquidityTracker.detectLiquidityDrop(tokenId);
-
-                if (significantDrop) {
-                    // Get market and event info
-                    const market = await this._getMarketInfo(tokenId);
-                    const event = await this._getEventInfo(tokenId);
-
-                    // Run liquidity-related signal processor
-                    const signal = await liquidityImpactProcessor.process(
-                        event,
-                        market,
-                        { tokenId, size: Math.abs(liquidityChange.totalChange), side: liquidityChange.totalChange < 0 ? 'SELL' : 'BUY' },
-                        orderbook
-                    );
-
-                    if (signal.detected) {
-                        this.detectedSignals++;
-
-                        this.emit('signal', {
-                            signal: {
-                                ...signal,
-                                processorName: 'liquidity-change',
-                                weight: liquidityImpactProcessor.weight
-                            },
-                            trade: null,
-                            market,
-                            liquidityChange
-                        });
-
-                        await db.detectedPatterns.record({
-                            type: 'liquidity-change',
-                            eventId: event?.id || tokenId,
-                            tokenId,
-                            confidence: signal.confidence,
-                            direction: signal.direction,
-                            severity: signal.severity,
-                            metadata: {
-                                ...signal.metadata,
-                                liquidityChange
-                            }
-                        });
-                    }
-                }
-            }
         } catch (error) {
             this.emit('error', error);
             console.error('StreamProcessor: Error processing orderbook update:', error.message);
@@ -300,14 +195,9 @@ class StreamProcessor extends EventEmitter {
             running: this.running,
             subscriptionCount: this.subscriptions.size,
             processedTrades: this.processedTrades,
-            detectedSignals: this.detectedSignals,
             detectedWhaleTrades: this.detectedWhaleTrades,
             uptime,
             uptimeFormatted: this._formatUptime(uptime),
-            processors: this.processors.map(p => ({
-                name: p.name,
-                weight: p.weight
-            })),
             whaleDetector: {
                 config: this.whaleDetector.getConfig()
             },
@@ -777,7 +667,6 @@ function startFakePatternGenerator() {
     const interval = setInterval(async () => {
         const pattern = generateFakePattern();
         await db.detectedPatterns.record(pattern);
-        streamProcessor.detectedSignals++;
         // Simulate processing 10-50 trades that led to this pattern detection
         streamProcessor.processedTrades += Math.floor(10 + Math.random() * 40);
         console.log(`[FakePatternGenerator] Created ${pattern.type} pattern (${pattern.severity})`);

@@ -220,6 +220,43 @@ class ProbabilityAdjuster extends EventEmitter {
             strength: signal.strength * decayFactor
         };
     }
+
+    /**
+     * Load whale signals from persisted history
+     * Called on server startup to restore state from database
+     * @param {Array} whaleTrades - Array of whale trade records from db.whaleTrades
+     * @returns {number} Number of signals loaded
+     */
+    loadFromHistory(whaleTrades) {
+        if (!Array.isArray(whaleTrades)) {
+            return 0;
+        }
+
+        let loaded = 0;
+        const now = Date.now();
+
+        for (const trade of whaleTrades) {
+            const tradeTime = typeof trade.timestamp === 'number'
+                ? trade.timestamp
+                : new Date(trade.recordedAt).getTime();
+            const age = now - tradeTime;
+
+            // Skip trades older than maxSignalAge
+            if (age > this.config.maxSignalAge) {
+                continue;
+            }
+
+            this.recordWhaleTrade({
+                assetId: trade.assetId,
+                side: trade.side,
+                depthPercent: trade.depthPercent,
+                notional: trade.notional
+            });
+            loaded++;
+        }
+
+        return loaded;
+    }
 }
 
 // Singleton instance

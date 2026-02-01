@@ -13,26 +13,10 @@ const polymarket = require('./services/polymarket/client');
 
 // Real-time stream processing
 const { streamProcessor } = require('./services/pipeline/stream-processor');
-const predictionEngine = require('./services/prediction/engine');
-const { regenerateArticleForEvent, createArticle } = require('./services/article/generator');
+const { createArticle } = require('./services/article/generator');
 const db = require('./db');
 
-// Debouncing for article regeneration (max once per 30 seconds per event)
-const REGENERATION_DEBOUNCE_MS = 30000;
-const SIGNIFICANCE_THRESHOLD = 0.05; // 5% adjustment threshold
-const lastRegenerationTime = new Map();
-
 const app = express();
-
-// Set up stream processor event listeners
-streamProcessor.on('signal', async ({ signal, trade, market }) => {
-    try {
-        await predictionEngine.processRealTimeSignal(signal, market);
-        console.log(`[Signal] ${signal.signalType} detected for market ${market?.id || 'unknown'}`);
-    } catch (error) {
-        console.error('Error processing real-time signal:', error);
-    }
-});
 
 // Handle stream processor errors gracefully (don't crash the server)
 streamProcessor.on('error', (error) => {
@@ -308,6 +292,12 @@ app.listen(config.port, () => {
                     }
                 }
             }
+
+            // Load persisted whale trades into probability adjuster
+            const { probabilityAdjuster } = require('./services/orderbook/probability-adjuster');
+            const recentWhales = await db.whaleTrades.getRecent(1000);
+            const loaded = probabilityAdjuster.loadFromHistory(recentWhales);
+            console.log(`[InitialSync] Loaded ${loaded} whale signals from history`);
 
             console.log(`[InitialSync] Completed: ${markets.length} events, ${syncedArticles} articles, ${streamProcessor.subscriptions.size} subscriptions`);
         } catch (error) {
