@@ -76,7 +76,12 @@ async function generateArticle(event, prediction) {
 
         const response = await anthropic.messages.create({
             model: config.anthropic.model,
-            system: `You are a professional news writer. Write ALL content in PRESENT TENSE as if events are happening NOW. Use active voice. Example: "Stock prices surge" not "Stock prices surged" or "will surge". Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never mention prediction markets or probabilities. If related news context is provided, incorporate relevant background information, facts, and real-world connections to make the story more informative and grounded in reality. Do not directly quote or cite the sources.`,
+            system: `You are a professional news writer reporting LIVE. Write EVERYTHING in PRESENT TENSE - this is non-negotiable. The event is happening RIGHT NOW as you write.
+
+CORRECT: "signs", "announces", "launches", "defeats", "wins", "passes"
+WRONG: "signed", "announced", "will sign", "is expected to", "has announced"
+
+Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never mention prediction markets or probabilities. If related news context is provided, incorporate relevant background information and facts. Do not directly quote or cite the sources.`,
             messages: [
                 {
                     role: 'user',
@@ -155,11 +160,16 @@ Write as if this is happening RIGHT NOW. Use present tense throughout.
 Return a valid JSON object (no markdown, no code blocks) with these fields:
 - headline: A compelling news headline in present tense (max 80 characters, no probability mention, no dates)
 - summary: A 1-2 sentence summary for preview cards (max 150 characters)
-- body: The full article (2-3 paragraphs, ~200-300 words). Use \\n for paragraph breaks, not actual newlines.
+- body: The full article (2-3 paragraphs, ~200-300 words). MUST use present tense throughout - write as live breaking news. Use \\n for paragraph breaks.
 - category: One of: Politics, World, Finance, Technology, Sports, Entertainment, Crypto, Other
 - isMeaningful: boolean - true if headline describes a positive action (e.g., "Deal Signed", "Stock Surges"), false if it describes absence/non-event (e.g., "No Storms", "Nothing Happens", "Fails to Occur")
 
 IMPORTANT: Return ONLY the JSON object, no other text. Use \\n for newlines in the body field.
+
+TENSE RULES (CRITICAL):
+- Use ONLY present tense: "The president signs" NOT "signed" or "will sign"
+- Write as LIVE news: "Markets react" NOT "Markets reacted" or "Markets are expected to react"
+- No hedging language: "announces" NOT "is set to announce" or "has announced"
 
 Write as if you are a professional journalist reporting on this event NOW. Use present tense verbs (announces, signs, reveals, launches). Include relevant context and implications. Do not mention prediction markets or probabilities in the article text.`;
 }

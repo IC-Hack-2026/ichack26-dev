@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-    title: 'FUTURO — Predictive News',
+    title: 'Future Times — Predictive News',
     description: 'News from the future. AI-generated articles about upcoming events with probability predictions.',
 }
 

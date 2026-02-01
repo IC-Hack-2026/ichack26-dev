@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Futuro News** is a predictive news platform that transforms Polymarket prediction market data into AI-generated news articles. It displays future events as if they've already happened, with probability badges showing how likely each prediction is.
+**Future Times** is a predictive news platform that transforms Polymarket prediction market data into AI-generated news articles. It displays future events as if they've already happened, with probability badges showing how likely each prediction is.
 
 ## Architecture
 

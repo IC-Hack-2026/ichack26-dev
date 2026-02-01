@@ -1,7 +1,7 @@
 {
-    "name": "futuro-news-backend",
+    "name": "future-times-backend",
     "version": "1.0.0",
-    "description": "Futuro News - Predictive news platform backend",
+    "description": "Future Times - Predictive news platform backend",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",

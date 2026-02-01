@@ -156,7 +156,7 @@ process.on('SIGTERM', async () => {
 
 // Start the server
 app.listen(config.port, () => {
-    console.log(`\nFuturo News Backend running on http://localhost:${config.port}`);
+    console.log(`\nFuture Times Backend running on http://localhost:${config.port}`);
     console.log('');
     console.log('Public API (for frontend):');
     console.log('  GET /api/articles              - List news articles');

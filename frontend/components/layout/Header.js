@@ -31,7 +31,7 @@ export default function Header() {
     return (
         <header className="header">
             <div className="header-top">
-                <Link href="/" className="logo">FUTURO</Link>
+                <Link href="/" className="logo">Future Times</Link>
                 <div className="header-top-right">
                     <button type="button" className="live-button">Live</button>
                     <span className="header-date">{date}</span>

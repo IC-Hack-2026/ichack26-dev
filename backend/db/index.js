@@ -265,16 +265,19 @@ const articles = {
             results = results.filter(a => a.category === category);
         }
 
-        // Filter by expiry date range
+        // Filter by expiry date range (using calendar days, not milliseconds)
         if (minDaysUntilExpiry != null || maxDaysUntilExpiry != null) {
-            const now = Date.now();
-            const minMs = (minDaysUntilExpiry || 0) * 24 * 60 * 60 * 1000;
-            const maxMs = (maxDaysUntilExpiry || Infinity) * 24 * 60 * 60 * 1000;
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const minDays = minDaysUntilExpiry || 0;
+            const maxDays = maxDaysUntilExpiry ?? Infinity;
 
             results = results.filter(a => {
                 if (!a.expiresAt) return false;
-                const msUntilExpiry = new Date(a.expiresAt).getTime() - now;
-                return msUntilExpiry >= minMs && msUntilExpiry <= maxMs;
+                const expiresAt = new Date(a.expiresAt);
+                const expiryStart = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate());
+                const diffDays = Math.round((expiryStart - todayStart) / (1000 * 60 * 60 * 24));
+                return diffDays >= minDays && diffDays <= maxDays;
             });
         }
 
@@ -289,24 +292,51 @@ const articles = {
     },
 
     async getFeatured(limit = 5, minDaysUntilExpiry = null, maxDaysUntilExpiry = null) {
-        let results = Array.from(store.articles.values());
+        // Exclude weather-related articles (common in Finance category)
+        const WEATHER_KEYWORDS = ['weather', 'temperature', 'storm', 'hurricane', 'tornado', 'rainfall', 'snowfall', 'celsius', 'fahrenheit'];
 
-        // Filter by expiry date range
+        const isWeatherArticle = (article) => {
+            const headline = (article.headline || '').toLowerCase();
+            return WEATHER_KEYWORDS.some(keyword => headline.includes(keyword));
+        };
+
+        let allArticles = Array.from(store.articles.values());
+
+        // Filter by expiry date range (using calendar days, not milliseconds)
         if (minDaysUntilExpiry != null || maxDaysUntilExpiry != null) {
-            const now = Date.now();
-            const minMs = (minDaysUntilExpiry || 0) * 24 * 60 * 60 * 1000;
-            const maxMs = (maxDaysUntilExpiry || Infinity) * 24 * 60 * 60 * 1000;
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const minDays = minDaysUntilExpiry || 0;
+            const maxDays = maxDaysUntilExpiry ?? Infinity;
 
-            results = results.filter(a => {
+            allArticles = allArticles.filter(a => {
                 if (!a.expiresAt) return false;
-                const msUntilExpiry = new Date(a.expiresAt).getTime() - now;
-                return msUntilExpiry >= minMs && msUntilExpiry <= maxMs;
+                const expiresAt = new Date(a.expiresAt);
+                const expiryStart = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate());
+                const diffDays = Math.round((expiryStart - todayStart) / (1000 * 60 * 60 * 24));
+                return diffDays >= minDays && diffDays <= maxDays;
             });
         }
 
-        return results
-            .sort((a, b) => (b.probability || 0) - (a.probability || 0))
-            .slice(0, limit);
+        // Sort all by probability (descending)
+        allArticles.sort((a, b) => (b.probability || 0) - (a.probability || 0));
+
+        // Get top article from each featured category
+        const featured = [];
+
+        // Politics - top by probability
+        const politics = allArticles.find(a => a.category === 'Politics');
+        if (politics) featured.push(politics);
+
+        // World - top by probability
+        const world = allArticles.find(a => a.category === 'World');
+        if (world) featured.push(world);
+
+        // Finance - top by probability, excluding weather
+        const finance = allArticles.find(a => a.category === 'Finance' && !isWeatherArticle(a));
+        if (finance) featured.push(finance);
+
+        return featured;
     },
 
     async count(category = null) {
