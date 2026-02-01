@@ -656,8 +656,8 @@ function startFakePatternGenerator() {
     return interval;
 }
 
-// Start fake pattern generator for testing
-const fakeGeneratorInterval = startFakePatternGenerator();
+// Disabled: Fake pattern generator prevents real WebSocket from starting
+// const fakeGeneratorInterval = startFakePatternGenerator();
 
 // Export both class and singleton instance
 module.exports = {
