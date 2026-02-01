@@ -21,7 +21,101 @@ function parseOutcomes(market) {
     }
 }
 
-// Categorize market based on title/description
+// Map Polymarket tags to our categories
+const TAG_TO_CATEGORY = {
+    // Politics
+    'politics': 'Politics',
+    'us-politics': 'Politics',
+    'elections': 'Politics',
+    'us-elections': 'Politics',
+    '2024-election': 'Politics',
+    '2024-elections': 'Politics',
+    '2025-election': 'Politics',
+    '2025-elections': 'Politics',
+    '2026-election': 'Politics',
+    '2026-elections': 'Politics',
+    'congress': 'Politics',
+    'senate': 'Politics',
+    'president': 'Politics',
+    'presidential': 'Politics',
+    // Crypto
+    'crypto': 'Crypto',
+    'bitcoin': 'Crypto',
+    'ethereum': 'Crypto',
+    'cryptocurrency': 'Crypto',
+    'defi': 'Crypto',
+    'nft': 'Crypto',
+    'web3': 'Crypto',
+    // Sports
+    'sports': 'Sports',
+    'nfl': 'Sports',
+    'nba': 'Sports',
+    'mlb': 'Sports',
+    'nhl': 'Sports',
+    'soccer': 'Sports',
+    'football': 'Sports',
+    'basketball': 'Sports',
+    'baseball': 'Sports',
+    'hockey': 'Sports',
+    'tennis': 'Sports',
+    'golf': 'Sports',
+    'ufc': 'Sports',
+    'mma': 'Sports',
+    'boxing': 'Sports',
+    'olympics': 'Sports',
+    'formula-1': 'Sports',
+    'f1': 'Sports',
+    // Finance
+    'finance': 'Finance',
+    'markets': 'Finance',
+    'fed': 'Finance',
+    'federal-reserve': 'Finance',
+    'stocks': 'Finance',
+    'economy': 'Finance',
+    'economics': 'Finance',
+    // Technology
+    'tech': 'Technology',
+    'technology': 'Technology',
+    'ai': 'Technology',
+    'artificial-intelligence': 'Technology',
+    'science': 'Technology',
+    'space': 'Technology',
+    // Entertainment
+    'entertainment': 'Entertainment',
+    'movies': 'Entertainment',
+    'music': 'Entertainment',
+    'tv': 'Entertainment',
+    'television': 'Entertainment',
+    'awards': 'Entertainment',
+    'celebrities': 'Entertainment',
+    'pop-culture': 'Entertainment',
+    // World
+    'world': 'World',
+    'geopolitics': 'World',
+    'international': 'World',
+    'global': 'World',
+    'middle-east': 'World',
+    'europe': 'World',
+    'asia': 'World',
+    'africa': 'World',
+    'latin-america': 'World',
+};
+
+// Get category from Polymarket tags
+function getCategoryFromTags(tags) {
+    if (!tags || !Array.isArray(tags)) return null;
+
+    for (const tag of tags) {
+        // Handle both object format {slug, label} and string format
+        const tagSlug = (typeof tag === 'string' ? tag : (tag.slug || tag.label || '')).toLowerCase();
+        if (TAG_TO_CATEGORY[tagSlug]) {
+            return TAG_TO_CATEGORY[tagSlug];
+        }
+    }
+    return null;
+}
+
+// Categorize market based on title/description (fallback when no tags available)
 // Priority order matters: World checked first to catch geopolitical terms before other categories
 function categorizeMarket(market) {
     const text = `${market.question || ''} ${market.description || ''}`.toLowerCase();
@@ -77,7 +171,8 @@ function categorizeMarket(market) {
 // Transform raw market to our format
 function transformMarket(market) {
     const outcomes = parseOutcomes(market);
-    const category = categorizeMarket(market);
+    // Use Polymarket's tags if available, otherwise fall back to regex
+    const category = getCategoryFromTags(market.tags) || categorizeMarket(market);
 
     return {
         id: market.id,
@@ -86,6 +181,7 @@ function transformMarket(market) {
         description: market.description || '',
         slug: market.slug,
         category,
+        tags: market.tags || [], // Store original tags
         probability: outcomes[0]?.probability ?? null,
         outcomes,
         volume24hr: parseFloat(market.volume24hr) || 0,
@@ -228,7 +324,9 @@ async function fetchEvents({ limit = 20 } = {}) {
             title: event.title,
             slug: event.slug,
             description: event.description || '',
-            category: categorizeMarket(event),
+            // Use Polymarket's tags if available, otherwise fall back to regex
+            category: getCategoryFromTags(event.tags) || categorizeMarket(event),
+            tags: event.tags || [], // Store original tags
             image: event.image,
             endDate: event.endDate,
             markets: (event.markets || []).map(m => transformMarket(m)),
@@ -252,5 +350,6 @@ module.exports = {
     fetchTags,
     transformMarket,
     categorizeMarket,
+    getCategoryFromTags,
     parseOutcomes
 };

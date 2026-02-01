@@ -2,43 +2,71 @@
 
 import { useState, useEffect } from 'react';
 import Header from '../components/layout/Header';
-import ArticleHero from '../components/article/ArticleHero';
-import ArticleCard from '../components/article/ArticleCard';
+import FeaturedCarousel from '../components/article/FeaturedCarousel';
+import CategorySection from '../components/article/CategorySection';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+function groupByCategory(articles) {
+    return articles.reduce((acc, article) => {
+        const cat = article.category || 'Other';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(article);
+        return acc;
+    }, {});
+}
+
+const timeHorizonConfig = {
+    tomorrow: { minDays: 0, maxDays: 1 },
+    week: { minDays: 0, maxDays: 7 },
+    month: { minDays: 0, maxDays: 30 }
+};
+
 export default function Home() {
-    const [featured, setFeatured] = useState(null);
-    const [articles, setArticles] = useState([]);
+    const [featuredArticles, setFeaturedArticles] = useState([]);
+    const [categoryGroups, setCategoryGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('publishedAt');
     const [probabilityFilter, setProbabilityFilter] = useState('0.6');
+    const [timeHorizon, setTimeHorizon] = useState('month');
 
     useEffect(() => {
         fetchArticles();
-    }, [sortBy, probabilityFilter]);
+    }, [sortBy, probabilityFilter, timeHorizon]);
 
     const fetchArticles = async () => {
         setLoading(true);
         try {
-            // Fetch featured article
-            const featuredRes = await fetch(`${API_URL}/api/articles/featured?limit=1`);
+            const { minDays, maxDays } = timeHorizonConfig[timeHorizon];
+
+            // Fetch featured articles (3 for carousel)
+            const featuredRes = await fetch(`${API_URL}/api/articles/featured?limit=3&minDays=${minDays}&maxDays=${maxDays}`);
             const featuredData = await featuredRes.json();
-            setFeatured(featuredData.articles?.[0] || null);
+            const featured = featuredData.articles || [];
+            setFeaturedArticles(featured);
+
+            // Get featured article IDs to exclude from category sections
+            const featuredIds = new Set(featured.map(a => a.id));
 
             // Fetch all articles
-            const articlesRes = await fetch(`${API_URL}/api/articles?limit=20&sort=${sortBy}`);
+            const articlesRes = await fetch(`${API_URL}/api/articles?limit=50&sort=${sortBy}&minDays=${minDays}&maxDays=${maxDays}`);
             const articlesData = await articlesRes.json();
 
-            // Filter out the featured article from the list
-            const featuredId = featuredData.articles?.[0]?.id;
-            let filteredArticles = articlesData.articles?.filter(a => a.id !== featuredId) || [];
-
-            // Apply probability filter
+            // Filter out featured articles and apply probability filter
             const threshold = parseFloat(probabilityFilter);
-            filteredArticles = filteredArticles.filter(a => a.probability >= threshold);
+            const filteredArticles = (articlesData.articles || [])
+                .filter(a => !featuredIds.has(a.id))
+                .filter(a => a.probability >= threshold);
 
-            setArticles(filteredArticles);
+            // Group by category
+            const grouped = groupByCategory(filteredArticles);
+
+            // Sort categories by article count (descending)
+            const sortedCategories = Object.entries(grouped)
+                .sort((a, b) => b[1].length - a[1].length)
+                .map(([category, articles]) => ({ category, articles }));
+
+            setCategoryGroups(sortedCategories);
         } catch (error) {
             console.error('Failed to fetch articles:', error);
         } finally {
@@ -92,6 +120,27 @@ export default function Home() {
                                     90%+
                                 </button>
                             </div>
+                            <div className="filter-controls">
+                                <span className="filter-label">Resolution:</span>
+                                <button
+                                    className={`filter-btn ${timeHorizon === 'tomorrow' ? 'active' : ''}`}
+                                    onClick={() => setTimeHorizon('tomorrow')}
+                                >
+                                    Tomorrow
+                                </button>
+                                <button
+                                    className={`filter-btn ${timeHorizon === 'week' ? 'active' : ''}`}
+                                    onClick={() => setTimeHorizon('week')}
+                                >
+                                    This Week
+                                </button>
+                                <button
+                                    className={`filter-btn ${timeHorizon === 'month' ? 'active' : ''}`}
+                                    onClick={() => setTimeHorizon('month')}
+                                >
+                                    This Month
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -102,23 +151,19 @@ export default function Home() {
                         </div>
                     ) : (
                         <>
-                            {featured && (
-                                <div className="hero-section">
-                                    <ArticleHero article={featured} />
-                                </div>
+                            {featuredArticles.length > 0 && (
+                                <FeaturedCarousel articles={featuredArticles} />
                             )}
 
-                            <div className="articles-grid">
-                                {articles.map((article, index) => (
-                                    <ArticleCard
-                                        key={article.id}
-                                        article={article}
-                                        index={index}
-                                    />
-                                ))}
-                            </div>
+                            {categoryGroups.map(({ category, articles }) => (
+                                <CategorySection
+                                    key={category}
+                                    category={category}
+                                    articles={articles}
+                                />
+                            ))}
 
-                            {articles.length === 0 && !featured && (
+                            {categoryGroups.length === 0 && featuredArticles.length === 0 && (
                                 <div className="empty-state">
                                     <p>No articles yet. Articles will be generated from prediction markets.</p>
                                 </div>

@@ -2,17 +2,23 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export async function fetchArticles({ category, limit = 20, offset = 0, sort = 'publishedAt' } = {}) {
+export async function fetchArticles({ category, limit = 20, offset = 0, sort = 'publishedAt', minDays, maxDays } = {}) {
     const params = new URLSearchParams({ limit, offset, sort });
     if (category) params.set('category', category);
+    if (minDays !== undefined) params.set('minDays', minDays);
+    if (maxDays !== undefined) params.set('maxDays', maxDays);
 
     const res = await fetch(`${API_URL}/api/articles?${params}`);
     if (!res.ok) throw new Error('Failed to fetch articles');
     return res.json();
 }
 
-export async function fetchFeaturedArticles(limit = 5) {
-    const res = await fetch(`${API_URL}/api/articles/featured?limit=${limit}`);
+export async function fetchFeaturedArticles({ limit = 5, minDays, maxDays } = {}) {
+    const params = new URLSearchParams({ limit });
+    if (minDays !== undefined) params.set('minDays', minDays);
+    if (maxDays !== undefined) params.set('maxDays', maxDays);
+
+    const res = await fetch(`${API_URL}/api/articles/featured?${params}`);
     if (!res.ok) throw new Error('Failed to fetch featured articles');
     return res.json();
 }

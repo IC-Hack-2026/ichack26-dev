@@ -197,17 +197,61 @@ app.listen(config.port, () => {
         });
     }
 
+    // Helper to subscribe to market tokens (only if article exists/created)
+    function subscribeToMarketTokens(market) {
+        let clobTokenIds = market.rawData?.clobTokenIds;
+        if (typeof clobTokenIds === 'string') {
+            try {
+                clobTokenIds = JSON.parse(clobTokenIds);
+            } catch {
+                clobTokenIds = null;
+            }
+        }
+        let subscribed = 0;
+        if (Array.isArray(clobTokenIds)) {
+            for (const tokenId of clobTokenIds) {
+                if (!streamProcessor.subscriptions.has(tokenId)) {
+                    streamProcessor.subscribeToMarket(tokenId);
+                    subscribed++;
+                }
+            }
+        }
+        return subscribed;
+    }
+
     // Auto-sync markets every 1 minute
     const AUTO_SYNC_INTERVAL = 1 * 60 * 1000; // 1 minute
     setInterval(async () => {
         try {
             console.log('[AutoSync] Starting periodic market sync...');
-            const markets = await polymarket.fetchMarkets({
-                limit: 500,
-                sortBy: 'endingSoon',
-                minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 30
-            });
+
+            // Dual-fetch: endingSoon + volume for diverse markets
+            const [endingSoonMarkets, volumeMarkets] = await Promise.all([
+                polymarket.fetchMarkets({
+                    limit: 1000,
+                    sortBy: 'endingSoon',
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                }),
+                polymarket.fetchMarkets({
+                    limit: 1000,
+                    sortBy: 'volume',
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                })
+            ]);
+
+            // Deduplicate by market ID (volume first for priority)
+            const seenIds = new Set();
+            const markets = [];
+            for (const market of [...volumeMarkets, ...endingSoonMarkets]) {
+                if (!seenIds.has(market.id)) {
+                    seenIds.add(market.id);
+                    markets.push(market);
+                }
+            }
+
+            console.log(`[AutoSync] Fetched ${volumeMarkets.length} volume + ${endingSoonMarkets.length} endingSoon = ${markets.length} unique markets`);
 
             let newEvents = 0;
             let newArticles = 0;
@@ -237,26 +281,15 @@ app.listen(config.port, () => {
                 const existingArticle = await db.articles.getByEventId(market.id);
                 if (!existingArticle) {
                     const prediction = await db.predictions.getLatestByEventId(market.id);
-                    await createArticle(market, prediction || { adjustedProbability: market.probability });
-                    newArticles++;
-                }
-
-                // Subscribe to market tokens
-                let clobTokenIds = market.rawData?.clobTokenIds;
-                if (typeof clobTokenIds === 'string') {
-                    try {
-                        clobTokenIds = JSON.parse(clobTokenIds);
-                    } catch {
-                        clobTokenIds = null;
+                    const article = await createArticle(market, prediction || { adjustedProbability: market.probability });
+                    if (article) {
+                        newArticles++;
+                        // Only subscribe if article was created
+                        newSubscriptions += subscribeToMarketTokens(market);
                     }
-                }
-                if (Array.isArray(clobTokenIds)) {
-                    for (const tokenId of clobTokenIds) {
-                        if (!streamProcessor.subscriptions.has(tokenId)) {
-                            streamProcessor.subscribeToMarket(tokenId);
-                            newSubscriptions++;
-                        }
-                    }
+                } else {
+                    // Article exists - subscribe to keep it updated
+                    newSubscriptions += subscribeToMarketTokens(market);
                 }
             }
 
@@ -270,14 +303,38 @@ app.listen(config.port, () => {
     setTimeout(async () => {
         try {
             console.log('[InitialSync] Running initial market sync...');
-            const markets = await polymarket.fetchMarkets({
-                limit: 500,
-                sortBy: 'endingSoon',
-                minDaysUntilResolution: 1,
-                maxDaysUntilResolution: 30
-            });
+
+            // Dual-fetch: endingSoon + volume for diverse markets
+            const [endingSoonMarkets, volumeMarkets] = await Promise.all([
+                polymarket.fetchMarkets({
+                    limit: 1000,
+                    sortBy: 'endingSoon',
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                }),
+                polymarket.fetchMarkets({
+                    limit: 1000,
+                    sortBy: 'volume',
+                    minDaysUntilResolution: 1,
+                    maxDaysUntilResolution: 30
+                })
+            ]);
+
+            // Deduplicate by market ID (volume first for priority)
+            const seenIds = new Set();
+            const markets = [];
+            for (const market of [...volumeMarkets, ...endingSoonMarkets]) {
+                if (!seenIds.has(market.id)) {
+                    seenIds.add(market.id);
+                    markets.push(market);
+                }
+            }
+
+            console.log(`[InitialSync] Fetched ${volumeMarkets.length} volume + ${endingSoonMarkets.length} endingSoon = ${markets.length} unique markets`);
 
             let syncedArticles = 0;
+            let totalSubscriptions = 0;
+
             for (const market of markets) {
                 await db.events.upsert({
                     id: market.id,
@@ -292,25 +349,15 @@ app.listen(config.port, () => {
 
                 const existingArticle = await db.articles.getByEventId(market.id);
                 if (!existingArticle) {
-                    await createArticle(market, { adjustedProbability: market.probability });
-                    syncedArticles++;
-                }
-
-                // Subscribe to tokens
-                let clobTokenIds = market.rawData?.clobTokenIds;
-                if (typeof clobTokenIds === 'string') {
-                    try {
-                        clobTokenIds = JSON.parse(clobTokenIds);
-                    } catch {
-                        clobTokenIds = null;
+                    const article = await createArticle(market, { adjustedProbability: market.probability });
+                    if (article) {
+                        syncedArticles++;
+                        // Only subscribe if article was created
+                        totalSubscriptions += subscribeToMarketTokens(market);
                     }
-                }
-                if (Array.isArray(clobTokenIds)) {
-                    for (const tokenId of clobTokenIds) {
-                        if (!streamProcessor.subscriptions.has(tokenId)) {
-                            streamProcessor.subscribeToMarket(tokenId);
-                        }
-                    }
+                } else {
+                    // Article exists - subscribe to keep it updated
+                    totalSubscriptions += subscribeToMarketTokens(market);
                 }
             }
 
@@ -320,7 +367,7 @@ app.listen(config.port, () => {
             const loaded = probabilityAdjuster.loadFromHistory(recentWhales);
             console.log(`[InitialSync] Loaded ${loaded} whale signals from history`);
 
-            console.log(`[InitialSync] Completed: ${markets.length} events, ${syncedArticles} articles, ${streamProcessor.subscriptions.size} subscriptions`);
+            console.log(`[InitialSync] Completed: ${markets.length} events, ${syncedArticles} articles, ${totalSubscriptions} subscriptions (total: ${streamProcessor.subscriptions.size})`);
         } catch (error) {
             console.error('[InitialSync] Failed:', error.message);
         }
