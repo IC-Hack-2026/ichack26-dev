@@ -56,14 +56,36 @@ export default function MarketDetail({ params }) {
         );
     }
 
-    const { bids = [], asks = [], stats = {} } = data || {};
+    const { bids = [], asks = [], stats = {}, eventTitle, outcome } = data || {};
+
+    const getOutcomeClass = (out) => {
+        if (!out) return '';
+        const lower = out.toLowerCase();
+        if (lower === 'yes') return 'outcome-yes';
+        if (lower === 'no') return 'outcome-no';
+        return '';
+    };
 
     return (
         <div className="market-detail">
             <div className="market-detail-header">
                 <div>
                     <Link href="/" className="back-link">Back to Dashboard</Link>
-                    <h1>{assetId}</h1>
+                    {eventTitle ? (
+                        <>
+                            <h1 className="event-title">
+                                {eventTitle}
+                                {outcome && (
+                                    <span className={`outcome-badge-large ${getOutcomeClass(outcome)}`}>
+                                        {outcome}
+                                    </span>
+                                )}
+                            </h1>
+                            <p className="asset-id-subtitle">{assetId}</p>
+                        </>
+                    ) : (
+                        <h1>{assetId}</h1>
+                    )}
                 </div>
                 <div className="refresh-indicator">
                     <span className="refresh-dot"></span>

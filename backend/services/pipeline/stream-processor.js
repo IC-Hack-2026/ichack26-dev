@@ -11,6 +11,7 @@ const { liquidityTracker } = require('../orderbook/liquidity-tracker');
 const { orderBookManager } = require('../orderbook/order-book-manager');
 const { WhaleDetector } = require('../orderbook/whale-detector');
 const { probabilityAdjuster } = require('../orderbook/probability-adjuster');
+const { assetRegistry } = require('../orderbook/asset-registry');
 const db = require('../../db');
 const config = require('../../config');
 
@@ -355,8 +356,14 @@ class StreamProcessor extends EventEmitter {
                 // Emit whale trade event
                 this.emit('whale-trade', whaleResult);
 
+                // Get asset metadata for human-readable context
+                const assetMeta = assetRegistry.get(whaleResult.assetId);
+                const contextPrefix = assetMeta && assetMeta.eventTitle
+                    ? `"${assetMeta.eventTitle}" ${assetMeta.outcome || ''} | `
+                    : '';
+
                 console.log(
-                    `[WHALE TRADE] ${whaleResult.side} ${whaleResult.size.toFixed(2)} @ ${whaleResult.price.toFixed(4)} ` +
+                    `[WHALE TRADE] ${contextPrefix}${whaleResult.side} ${whaleResult.size.toFixed(2)} @ ${whaleResult.price.toFixed(4)} ` +
                     `(${whaleResult.depthPercent.toFixed(1)}% of book, $${whaleResult.notional.toFixed(2)} notional)`
                 );
             }
@@ -423,7 +430,7 @@ class StreamProcessor extends EventEmitter {
                 const markets = await polymarket.fetchMarkets({ limit: 100 });
 
                 for (const market of markets) {
-                    await this._subscribeToMarketTokens(market.rawData?.clobTokenIds, market.id);
+                    await this._subscribeToMarketTokens(market.rawData, market.id, market.question || market.title);
                 }
                 console.log(`StreamProcessor: Auto-subscribed to ${this.subscriptions.size} markets from API`);
                 return;
@@ -431,8 +438,8 @@ class StreamProcessor extends EventEmitter {
 
             // Subscribe to events from database
             for (const event of activeEvents) {
-                // Extract clobTokenIds from rawData (where sync stores it)
-                await this._subscribeToMarketTokens(event.rawData?.clobTokenIds, event.id);
+                // Extract rawData (where sync stores clobTokenIds and outcomes)
+                await this._subscribeToMarketTokens(event.rawData, event.id, event.title);
             }
 
             console.log(`StreamProcessor: Subscribed to ${this.subscriptions.size} markets from DB`);
@@ -443,12 +450,18 @@ class StreamProcessor extends EventEmitter {
 
     /**
      * Helper to subscribe to market tokens and optionally generate article
-     * @param {string|Array} clobTokenIds - Token IDs (may be JSON string or array)
+     * @param {Object} rawData - Raw market data containing clobTokenIds and outcomes
      * @param {string} eventId - Event ID for article generation
+     * @param {string} eventTitle - Human-readable event title/question
      * @private
      */
-    async _subscribeToMarketTokens(clobTokenIds, eventId) {
-        // Parse if it's a JSON string
+    async _subscribeToMarketTokens(rawData, eventId, eventTitle) {
+        if (!rawData) {
+            return;
+        }
+
+        // Parse clobTokenIds if it's a JSON string
+        let clobTokenIds = rawData.clobTokenIds;
         if (typeof clobTokenIds === 'string') {
             try {
                 clobTokenIds = JSON.parse(clobTokenIds);
@@ -461,7 +474,33 @@ class StreamProcessor extends EventEmitter {
             return;
         }
 
-        for (const tokenId of clobTokenIds) {
+        // Parse outcomes if it's a JSON string
+        let outcomes = rawData.outcomes;
+        if (typeof outcomes === 'string') {
+            try {
+                outcomes = JSON.parse(outcomes);
+            } catch {
+                outcomes = null;
+            }
+        }
+
+        // Default outcomes if not provided
+        if (!Array.isArray(outcomes)) {
+            outcomes = ['Yes', 'No'];
+        }
+
+        for (let i = 0; i < clobTokenIds.length; i++) {
+            const tokenId = clobTokenIds[i];
+            const outcome = outcomes[i] || (i === 0 ? 'Yes' : 'No');
+
+            // Register asset metadata
+            assetRegistry.register(tokenId, {
+                eventId,
+                eventTitle,
+                outcome,
+                outcomeIndex: i
+            });
+
             // Only subscribe if not already subscribed
             if (!this.subscriptions.has(tokenId)) {
                 this.subscribeToMarket(tokenId);

@@ -12,6 +12,7 @@ const signalRegistry = require('../../services/signals/registry');
 const cache = require('../../services/cache');
 const { streamProcessor } = require('../../services/pipeline/stream-processor');
 const { probabilityAdjuster } = require('../../services/orderbook/probability-adjuster');
+const { assetRegistry } = require('../../services/orderbook/asset-registry');
 
 // POST /api/internal/sync - Trigger sync with Polymarket
 router.post('/sync', async (req, res) => {
@@ -52,7 +53,7 @@ router.post('/sync', async (req, res) => {
             await articleGenerator.createArticle(market, prediction);
             results.articles++;
 
-            // Subscribe to market's token IDs for real-time updates
+            // Subscribe to market's token IDs for real-time updates and register asset metadata
             let clobTokenIds = market.rawData?.clobTokenIds;
             if (typeof clobTokenIds === 'string') {
                 try {
@@ -61,8 +62,33 @@ router.post('/sync', async (req, res) => {
                     clobTokenIds = null;
                 }
             }
+
+            // Parse outcomes from rawData
+            let outcomes = market.rawData?.outcomes;
+            if (typeof outcomes === 'string') {
+                try {
+                    outcomes = JSON.parse(outcomes);
+                } catch {
+                    outcomes = null;
+                }
+            }
+            if (!Array.isArray(outcomes)) {
+                outcomes = ['Yes', 'No'];
+            }
+
             if (Array.isArray(clobTokenIds)) {
-                for (const tokenId of clobTokenIds) {
+                for (let i = 0; i < clobTokenIds.length; i++) {
+                    const tokenId = clobTokenIds[i];
+                    const outcome = outcomes[i] || (i === 0 ? 'Yes' : 'No');
+
+                    // Register asset metadata for order book display
+                    assetRegistry.register(tokenId, {
+                        eventId: market.id,
+                        eventTitle: market.question || market.title,
+                        outcome,
+                        outcomeIndex: i
+                    });
+
                     if (!streamProcessor.subscriptions.has(tokenId)) {
                         streamProcessor.subscribeToMarket(tokenId);
                         results.subscriptions++;

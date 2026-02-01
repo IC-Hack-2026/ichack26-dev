@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { orderBookManager } = require('../../services/orderbook/order-book-manager');
+const { assetRegistry } = require('../../services/orderbook/asset-registry');
 
 /**
  * GET /api/orderbook
@@ -15,19 +16,25 @@ router.get('/', (req, res) => {
     try {
         const status = orderBookManager.getStatus();
 
-        const orderBooks = status.orderBooks.map(ob => ({
-            assetId: ob.assetId,
-            initialized: ob.initialized,
-            bidLevels: ob.bidLevels,
-            askLevels: ob.askLevels,
-            bestBid: ob.midPrice - ob.spread / 2 || null,
-            bestAsk: ob.midPrice + ob.spread / 2 || null,
-            spread: ob.spread,
-            spreadPercent: ob.spreadPercent,
-            midPrice: ob.midPrice,
-            imbalance: ob.imbalance,
-            timestamp: ob.timestamp
-        }));
+        const orderBooks = status.orderBooks.map(ob => {
+            const assetMeta = assetRegistry.get(ob.assetId);
+            return {
+                assetId: ob.assetId,
+                eventTitle: assetMeta?.eventTitle || null,
+                outcome: assetMeta?.outcome || null,
+                eventId: assetMeta?.eventId || null,
+                initialized: ob.initialized,
+                bidLevels: ob.bidLevels,
+                askLevels: ob.askLevels,
+                bestBid: ob.midPrice - ob.spread / 2 || null,
+                bestAsk: ob.midPrice + ob.spread / 2 || null,
+                spread: ob.spread,
+                spreadPercent: ob.spreadPercent,
+                midPrice: ob.midPrice,
+                imbalance: ob.imbalance,
+                timestamp: ob.timestamp
+            };
+        });
 
         res.json({
             count: status.totalOrderBooks,
@@ -71,9 +78,13 @@ router.get('/:assetId', (req, res) => {
 
         const fullBook = orderBook.getFullBook();
         const stats = orderBook.getStats();
+        const assetMeta = assetRegistry.get(assetId);
 
         res.json({
             assetId,
+            eventTitle: assetMeta?.eventTitle || null,
+            outcome: assetMeta?.outcome || null,
+            eventId: assetMeta?.eventId || null,
             ...fullBook,
             stats: {
                 bidLevels: stats.bidLevels,
@@ -124,9 +135,13 @@ router.get('/:assetId/depth', (req, res) => {
         const depth = orderBook.getDepth(levels);
         const spread = orderBook.getSpread();
         const imbalance = orderBook.getImbalance();
+        const assetMeta = assetRegistry.get(assetId);
 
         res.json({
             assetId,
+            eventTitle: assetMeta?.eventTitle || null,
+            outcome: assetMeta?.outcome || null,
+            eventId: assetMeta?.eventId || null,
             levels,
             ...depth,
             spread: spread.spread,

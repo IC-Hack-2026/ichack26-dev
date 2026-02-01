@@ -145,6 +145,52 @@ main {
     font-family: var(--font-mono);
 }
 
+.market-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.market-title {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.market-id-row {
+    margin-bottom: 0.5rem;
+}
+
+.market-id-small {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.outcome-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.outcome-badge.outcome-yes {
+    background: var(--color-bid-bg);
+    color: var(--color-bid);
+}
+
+.outcome-badge.outcome-no {
+    background: var(--color-ask-bg);
+    color: var(--color-ask);
+}
+
 .status {
     font-size: 0.7rem;
     padding: 0.25rem 0.5rem;
@@ -263,6 +309,40 @@ main {
 .market-detail-header h1 {
     font-size: 1.25rem;
     font-weight: 600;
+    word-break: break-all;
+}
+
+.market-detail-header h1.event-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    word-break: normal;
+}
+
+.outcome-badge-large {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.outcome-badge-large.outcome-yes {
+    background: var(--color-bid-bg);
+    color: var(--color-bid);
+}
+
+.outcome-badge-large.outcome-no {
+    background: var(--color-ask-bg);
+    color: var(--color-ask);
+}
+
+.asset-id-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 0.5rem;
     word-break: break-all;
 }
 
