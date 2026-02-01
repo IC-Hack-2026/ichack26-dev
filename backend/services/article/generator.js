@@ -144,6 +144,41 @@ function interpretBinaryOutcome(question, outcomeName) {
     return interpreted;
 }
 
+// Interpret multi-outcome questions by combining question context with outcome name
+function interpretMultiOutcome(question, outcomeName) {
+    if (!question || !outcomeName) {
+        return null;
+    }
+
+    // Handle "Who will..." questions (elections, appointments)
+    const whoMatch = question.match(/^Who will (.+?)\??$/i);
+    if (whoMatch) {
+        // "Who will win the German election?" + "Merz" -> "Merz wins the German election"
+        const action = whoMatch[1]
+            .replace(/^be\s+/i, 'becomes ')  // "be president" -> "becomes president"
+            .replace(/\s+in\s+\d{4}$/i, ''); // Remove year suffix
+        return `${outcomeName} ${action}`;
+    }
+
+    // Handle "Which..." questions
+    const whichMatch = question.match(/^Which (.+?) will (.+?)\??$/i);
+    if (whichMatch) {
+        // "Which party will win?" + "CDU" -> "CDU wins"
+        return `${outcomeName} ${whichMatch[2]}`;
+    }
+
+    // Handle "What will..." questions
+    const whatMatch = question.match(/^What will (.+?)\??$/i);
+    if (whatMatch) {
+        // "What will happen in Ukraine?" + "Ceasefire" -> "Ceasefire in Ukraine"
+        const context = whatMatch[1].replace(/^happen\s+(in|to|with)\s*/i, '');
+        return `${outcomeName} ${context ? 'in ' + context : ''}`.trim();
+    }
+
+    // Fallback: return null to use the generic format
+    return null;
+}
+
 function buildPrompt(event, probabilityPercent, relatedNews = []) {
     const eventTitle = event.title || event.question;
     const eventDescription = event.description || '';
@@ -174,13 +209,27 @@ IMPORTANT: Write the headline stating this outcome as fact. Be specific about WH
 
         // Fall back to original format for non-binary or if interpretation failed
         if (!outcomesContext) {
-            outcomesContext = `
+            // Try to interpret multi-outcome questions
+            const interpretedMulti = interpretMultiOutcome(eventTitle, favorite.name);
+
+            if (interpretedMulti) {
+                outcomesContext = `
+
+PREDICTED OUTCOME (${favoritePercent}% probability):
+${interpretedMulti}
+
+IMPORTANT: Write the headline stating this outcome as fact. Be specific about WHO wins or WHAT happens.`;
+            } else {
+                // Final fallback with explicit instruction
+                outcomesContext = `
 
 OUTCOME DATA (use this for the headline):
 - FAVORED OUTCOME: ${favorite.name} (${favoritePercent}% probability)
+- Question context: ${eventTitle}
 - Other outcomes: ${sorted.slice(1).map(o => `${o.name} (${Math.round((o.probability || 0) * 100)}%)`).join(', ')}
 
-IMPORTANT: Write the headline as if "${favorite.name}" is the outcome. Be decisive and specific.`;
+IMPORTANT: Write the headline stating "${favorite.name}" as the answer to "${eventTitle}". Be decisive and specific - name WHO or WHAT.`;
+            }
         }
     }
 
