@@ -86,15 +86,18 @@ class ProbabilityAdjuster extends EventEmitter {
     getAdjustedProbability(assetId, baseProbability) {
         const signal = this.whaleSignals.get(assetId);
 
+        // Always clamp base probability to avoid extreme values (2%-98%)
+        const clampedBase = Math.max(0.02, Math.min(0.98, baseProbability));
+
         if (!signal) {
-            return baseProbability;
+            return clampedBase;
         }
 
         // Check if signal is too old
         const age = Date.now() - signal.timestamp;
         if (age > this.config.maxSignalAge) {
             this.whaleSignals.delete(assetId);
-            return baseProbability;
+            return clampedBase;
         }
 
         // Apply time decay
@@ -104,8 +107,8 @@ class ProbabilityAdjuster extends EventEmitter {
         // Calculate adjustment (bounded to prevent extreme swings)
         const adjustment = signal.direction * effectiveStrength * this.config.whaleWeight;
 
-        // Clamp to [0.01, 0.99] to avoid certainty
-        return Math.max(0.01, Math.min(0.99, baseProbability + adjustment));
+        // Clamp to [0.01, 0.99] to allow slightly more extreme with whale data
+        return Math.max(0.01, Math.min(0.99, clampedBase + adjustment));
     }
 
     /**

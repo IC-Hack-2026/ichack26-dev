@@ -24,10 +24,10 @@ module.exports = {
         useInMemory: !process.env.REDIS_URL
     },
 
-    // OpenAI
-    openai: {
-        apiKey: process.env.OPENAI_API_KEY || '',
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
+    // Anthropic (Claude)
+    anthropic: {
+        apiKey: process.env.ANTHROPIC_API_KEY || '',
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
     },
 
     // Polymarket API
@@ -90,15 +90,17 @@ module.exports = {
 
     // Cache settings
     cache: {
-        articleTTL: 15 * 60 * 1000, // 15 minutes
-        marketTTL: 5 * 60 * 1000,   // 5 minutes
-        eventTTL: 10 * 60 * 1000    // 10 minutes
+        articleTTL: 5 * 60 * 1000,  // 5 minutes
+        marketTTL: 1 * 60 * 1000,   // 1 minute
+        eventTTL: 5 * 60 * 1000     // 5 minutes
     },
 
     // Article generation settings
     article: {
         maxLength: 800,
-        summaryLength: 150
+        summaryLength: 150,
+        // Only generate articles for these categories (empty = all categories)
+        allowedCategories: (process.env.ALLOWED_CATEGORIES || 'World,Finance,Sports,Politics,Technology').split(',').map(c => c.trim()).filter(Boolean)
     },
 
     // RAG (Related News Search) settings

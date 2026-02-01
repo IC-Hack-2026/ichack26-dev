@@ -25,7 +25,7 @@ export default function ArticleFull({ article }) {
                 <h1 className="article-full-headline">{article.headline}</h1>
 
                 <div className="article-full-probability">
-                    <ProbabilityBadge probability={article.probability} size="large" />
+                    <ProbabilityBadge probability={article.adjustedProbability ?? article.probability} size="large" />
                     <span className="probability-context">
                         Based on market analysis and predictive signals
                     </span>

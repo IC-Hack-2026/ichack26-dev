@@ -14,9 +14,23 @@ export default function Sidebar() {
 
     const fetchCategories = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/categories`);
-            const data = await res.json();
-            setCategories(data.categories || []);
+            // Try to get Polymarket tags first for accurate categorization
+            const tagsRes = await fetch(`${API_URL}/api/tags`);
+            const tagsData = await tagsRes.json();
+
+            if (tagsData.tags?.length > 0) {
+                // Map tags to category format with capitalized names
+                setCategories(tagsData.tags.map(tag => ({
+                    name: tag.label || tag.name || (typeof tag === 'string' ? tag : ''),
+                    slug: tag.slug || (tag.name || tag || '').toLowerCase(),
+                    count: 0
+                })).filter(cat => cat.name));
+            } else {
+                // Fall back to article-based categories
+                const res = await fetch(`${API_URL}/api/categories`);
+                const data = await res.json();
+                setCategories(data.categories || []);
+            }
         } catch (error) {
             console.error('Failed to fetch categories:', error);
             // Default categories
@@ -43,8 +57,8 @@ export default function Sidebar() {
                 <nav className="sidebar-nav">
                     {categories.map(cat => (
                         <Link
-                            key={cat.name}
-                            href={`/category/${encodeURIComponent(cat.name.toLowerCase())}`}
+                            key={cat.slug || cat.name}
+                            href={`/category/${encodeURIComponent(cat.slug || cat.name.toLowerCase())}`}
                             className="sidebar-link"
                         >
                             <span>{cat.name}</span>

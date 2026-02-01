@@ -1,44 +1,63 @@
-// Article generation service using OpenAI
+// Article generation service using Claude
 // Transforms Polymarket events into news articles
 
 const config = require('../../config');
 const db = require('../../db');
 
-// Generate article using OpenAI
+// Parse JSON from Claude's response, handling markdown code blocks and control characters
+function parseClaudeJSON(text) {
+    // Extract JSON from markdown code blocks if present
+    let jsonStr = text;
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1];
+    }
+
+    // Remove control characters that break JSON parsing
+    // Replace actual newlines inside string values with \n escape sequences
+    jsonStr = jsonStr.replace(/:\s*"([^"]*?)"/g, (match, content) => {
+        const escaped = content
+            .replace(/\r\n/g, '\\n')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\n')
+            .replace(/\t/g, '\\t');
+        return `: "${escaped}"`;
+    });
+
+    return JSON.parse(jsonStr.trim());
+}
+
+// Generate article using Claude
 async function generateArticle(event, prediction) {
     const probability = prediction?.adjustedProbability || event.probability || 0.5;
     const probabilityPercent = Math.round(probability * 100);
 
-    // Check if OpenAI is configured
-    if (!config.openai.apiKey) {
+    // Check if Anthropic is configured
+    if (!config.anthropic.apiKey) {
         // Fallback: generate a simple article without AI
         return generateFallbackArticle(event, probabilityPercent);
     }
 
     try {
-        const { default: OpenAI } = await import('openai');
-        const openai = new OpenAI({ apiKey: config.openai.apiKey });
+        const Anthropic = (await import('@anthropic-ai/sdk')).default;
+        const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
         const prompt = buildPrompt(event, probabilityPercent);
 
-        const response = await openai.chat.completions.create({
-            model: config.openai.model,
+        const response = await anthropic.messages.create({
+            model: config.anthropic.model,
+            system: `You are a professional news writer for a publication that reports on future events as if they have already happened. Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never use phrases like "prediction market" or "probability" in the article body - write as if reporting actual news.`,
             messages: [
-                {
-                    role: 'system',
-                    content: `You are a professional news writer for a publication that reports on future events as if they have already happened. Write in a serious, journalistic tone similar to Reuters or AP News. Be factual and objective. Never use phrases like "prediction market" or "probability" in the article body - write as if reporting actual news.`
-                },
                 {
                     role: 'user',
                     content: prompt
                 }
             ],
-            response_format: { type: 'json_object' },
             max_tokens: 1000,
             temperature: 0.7
         });
 
-        const result = JSON.parse(response.choices[0].message.content);
+        const result = parseClaudeJSON(response.content[0].text);
 
         return {
             headline: result.headline,
@@ -51,7 +70,7 @@ async function generateArticle(event, prediction) {
             expiresAt: event.endDate
         };
     } catch (error) {
-        console.error('OpenAI generation failed:', error.message);
+        console.error('Claude generation failed:', error.message);
         return generateFallbackArticle(event, probabilityPercent);
     }
 }
@@ -79,10 +98,12 @@ CONTEXT: ${eventDescription}
 CATEGORY: ${event.category || 'General'}
 ${framing}
 
-Return a JSON object with these fields:
+Return a valid JSON object (no markdown, no code blocks) with these fields:
 - headline: A compelling news headline (max 80 characters, no probability mention)
 - summary: A 1-2 sentence summary for preview cards (max 150 characters)
-- body: The full article (2-3 paragraphs, ~200-300 words)
+- body: The full article (2-3 paragraphs, ~200-300 words). Use \\n for paragraph breaks, not actual newlines.
+
+IMPORTANT: Return ONLY the JSON object, no other text. Use \\n for newlines in the body field.
 
 Write as if you are a professional journalist reporting on this event. Include relevant context and implications. Do not mention prediction markets or probabilities in the article text.`;
 }
