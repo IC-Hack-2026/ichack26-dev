@@ -9,6 +9,8 @@ const polymarket = require('../../services/polymarket/client');
 const predictionEngine = require('../../services/prediction/engine');
 const articleGenerator = require('../../services/article/generator');
 const { probabilityAdjuster } = require('../../services/orderbook/probability-adjuster');
+const ragService = require('../../services/rag');
+const config = require('../../config');
 
 // GET /api/articles - List articles with optional filters
 router.get('/', async (req, res) => {
@@ -88,6 +90,46 @@ router.get('/featured', async (req, res) => {
     } catch (error) {
         console.error('Error fetching featured articles:', error.message);
         res.status(500).json({ error: 'Failed to fetch featured articles', details: error.message });
+    }
+});
+
+// GET /api/articles/:slug/related - Get related news via RAG search
+// Note: This route must be defined before /:slug to ensure proper matching
+router.get('/:slug/related', async (req, res) => {
+    try {
+        const { slug } = req.params;
+        const article = await db.articles.getBySlug(slug);
+
+        if (!article) {
+            return res.status(404).json({ error: 'Article not found' });
+        }
+
+        // Check if RAG is enabled
+        if (!config.rag.enabled) {
+            return res.json({
+                articleId: article.id,
+                headline: article.headline,
+                relatedArticles: [],
+                message: 'RAG search is not configured. Set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY to enable.'
+            });
+        }
+
+        // Search for related news using the article headline
+        const result = await ragService.findRelatedNews(article.headline, {
+            limit: config.rag.maxResults,
+            generateSummaries: config.rag.generateSummaries
+        });
+
+        res.json({
+            articleId: article.id,
+            headline: article.headline,
+            searchQuery: result.query,
+            provider: result.provider,
+            relatedArticles: result.relatedArticles
+        });
+    } catch (error) {
+        console.error('Error fetching related articles:', error.message);
+        res.status(500).json({ error: 'Failed to fetch related articles', details: error.message });
     }
 });
 
