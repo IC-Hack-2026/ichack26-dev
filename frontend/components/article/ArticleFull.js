@@ -3,6 +3,7 @@
 import ProbabilityBadge from '../common/ProbabilityBadge';
 import CategoryPill from '../common/CategoryPill';
 import TimeAgo from '../common/TimeAgo';
+import RelatedArticles from './RelatedArticles';
 
 export default function ArticleFull({ article }) {
     if (!article) return null;
@@ -59,6 +60,10 @@ export default function ArticleFull({ article }) {
                     is based on market data and signal analysis. Actual outcomes may differ.
                 </div>
             </div>
+
+            {article.slug && (
+                <RelatedArticles articleSlug={article.slug} />
+            )}
         </article>
     );
 }
