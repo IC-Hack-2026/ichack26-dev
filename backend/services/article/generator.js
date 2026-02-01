@@ -109,6 +109,7 @@ Write in a serious, journalistic tone similar to Reuters or AP News. Be factual 
             category,
             eventId: event.id,
             probability,
+            totalVolume: event.totalVolume || 0,
             imageUrl: event.image,
             expiresAt: event.endDate
         };
@@ -122,19 +123,19 @@ function buildPrompt(event, probabilityPercent, relatedNews = []) {
     const eventTitle = event.title || event.question;
     const eventDescription = event.description || '';
 
-    // For sports, include outcome details so Claude knows which team is favored
+    // Include outcome details so Claude knows the favored outcome
     let outcomesContext = '';
-    if (event.category === 'Sports' && event.outcomes && event.outcomes.length > 0) {
+    if (event.outcomes && event.outcomes.length > 0) {
         const sorted = [...event.outcomes].sort((a, b) => (b.probability || 0) - (a.probability || 0));
         const favorite = sorted[0];
         const favoritePercent = Math.round((favorite.probability || 0) * 100);
         outcomesContext = `
 
 OUTCOME DATA (use this for the headline):
-- FAVORED TO WIN: ${favorite.name} (${favoritePercent}% probability)
+- FAVORED OUTCOME: ${favorite.name} (${favoritePercent}% probability)
 - Other outcomes: ${sorted.slice(1).map(o => `${o.name} (${Math.round((o.probability || 0) * 100)}%)`).join(', ')}
 
-IMPORTANT: Write the headline as if ${favorite.name} wins/succeeds. Be decisive about the winner.`;
+IMPORTANT: Write the headline as if "${favorite.name}" is the outcome. Be decisive and specific.`;
     }
 
     // Build related news context section (descriptions only, no titles to avoid influencing headlines)
@@ -208,6 +209,7 @@ Industry experts note that recent developments strengthen the case for this outc
         category: event.category || 'Other',
         eventId: event.id,
         probability: probabilityPercent / 100,
+        totalVolume: event.totalVolume || 0,
         imageUrl: event.image,
         expiresAt: event.endDate
     };

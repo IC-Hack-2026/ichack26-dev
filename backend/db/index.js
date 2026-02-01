@@ -300,6 +300,15 @@ const articles = {
             return WEATHER_KEYWORDS.some(keyword => headline.includes(keyword));
         };
 
+        // Calculate score: probability * (1 + volumeBoost)
+        // Volume acts as a confidence multiplier - high volume markets get up to 30% boost
+        const calculateScore = (article) => {
+            const prob = article.probability || 0;
+            const volume = article.totalVolume || 0;
+            const volumeBoost = Math.min(0.3, Math.log10(volume + 1) / 20);
+            return prob * (1 + volumeBoost);
+        };
+
         let allArticles = Array.from(store.articles.values());
 
         // Filter by expiry date range (using calendar days, not milliseconds)
@@ -318,21 +327,21 @@ const articles = {
             });
         }
 
-        // Sort all by probability (descending)
-        allArticles.sort((a, b) => (b.probability || 0) - (a.probability || 0));
+        // Sort all by combined score (probability * volume boost, descending)
+        allArticles.sort((a, b) => calculateScore(b) - calculateScore(a));
 
         // Get top article from each featured category
         const featured = [];
 
-        // Politics - top by probability
+        // Politics - top by score
         const politics = allArticles.find(a => a.category === 'Politics');
         if (politics) featured.push(politics);
 
-        // World - top by probability
+        // World - top by score
         const world = allArticles.find(a => a.category === 'World');
         if (world) featured.push(world);
 
-        // Finance - top by probability, excluding weather
+        // Finance - top by score, excluding weather
         const finance = allArticles.find(a => a.category === 'Finance' && !isWeatherArticle(a));
         if (finance) featured.push(finance);
 

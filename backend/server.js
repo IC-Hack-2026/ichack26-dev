@@ -289,6 +289,7 @@ app.listen(config.port, () => {
                         image: event.image,
                         probability: primaryMarket.probability,
                         outcomes: primaryMarket.outcomes,
+                        totalVolume: primaryMarket.totalVolume,
                         rawData: primaryMarket.rawData
                     };
                     const article = await createArticle(articleEvent, prediction || { adjustedProbability: primaryMarket.probability });
@@ -360,6 +361,7 @@ app.listen(config.port, () => {
                         image: event.image,
                         probability: primaryMarket.probability,
                         outcomes: primaryMarket.outcomes,
+                        totalVolume: primaryMarket.totalVolume,
                         rawData: primaryMarket.rawData
                     };
                     const article = await createArticle(articleEvent, { adjustedProbability: primaryMarket.probability });
